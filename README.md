@@ -8,10 +8,12 @@ movement is driven by physics raycasts via Avian3d spatial queries.
 - **Crouch** with collider resizing and stand-up obstruction checks
 - **Slide** by sprinting into crouch — momentum-based with a friction curve and configurable boost
 - **Slide jump** for a forward momentum boost when jumping out of a slide
-- **Ledge grab** by pressing jump near a wall edge while airborne
+- **Ledge grab** by pressing jump near a wall edge while airborne (requires `LedgeGrabbable` marker)
 - **Ledge climb** with a two-phase animated mantle (up then forward)
 - **Ledge shuffle** by strafing while hanging, with head bob
 - **Wall jump** by looking away from the wall and jumping while grabbing a ledge
+- **Ladder climbing** on surfaces marked with `Ladder` — press up to grab, jump to dismount
+- **Forced slide** on surfaces marked with `ForceSlide` — player is pushed downhill by gravity
 - **Auto step-up** over small obstacles like stairs and curbs
 - **Slope handling** with velocity projection to maintain speed on inclines
 - **Air control** with reduced acceleration while airborne
@@ -134,6 +136,8 @@ spawn_player(
 | `ledge_cooldown` | `0.4` | Cooldown before re-grabbing a ledge (s) |
 | `ledge_grab_max_fall_speed` | `10.0` | Max fall speed for ledge grab (m/s), 0 = uncapped |
 | `ledge_grab_ascending` | `false` | Allow ledge grab while moving upward |
+| `ladder_climb_speed` | `4.0` | Ladder climbing speed (m/s) |
+| `max_slope_angle` | `39.0` | Maximum walkable slope angle (degrees) |
 | `step_up_height` | `0.35` | Max auto-step obstacle height (m) |
 | `player_layer` | `GameLayer::Player` | Physics layer for the player body |
 | `world_layer` | `GameLayer::World` | Layer mask for spatial queries (ground, ledge, step-up, crouch) |
@@ -175,6 +179,10 @@ World geometry should collide with the player layer you choose:
 CollisionLayers::new(MyLayer::Environment, [MyLayer::Player])
 ```
 
+Add `LedgeGrabbable` to walls that should support ledge grabs, `Ladder` to
+climbable surfaces (use `Sensor` on the trigger layer), and `ForceSlide` to
+ramps that force the player downhill.
+
 ## Querying Player State
 
 The player's current state is expressed as marker components. Query them in
@@ -191,6 +199,8 @@ fn my_system(
         Has<Sliding>,
         Has<LedgeGrabbing>,
         Has<LedgeClimbing>,
+        Has<OnLadder>,
+        Has<ForcedSliding>,
     ), With<Player>>,
 ) {
     let Ok((velocity, transform, grounded, ..)) = query.single() else { return };
@@ -218,6 +228,10 @@ fn play_sounds(mut reader: MessageReader<PlayerAudioMessage>) {
             PlayerAudioMessage::LedgeClimbFinished => { /* done */ }
             PlayerAudioMessage::WallJumped => { /* kick */ }
             PlayerAudioMessage::SteppedUp => { /* tap */ }
+            PlayerAudioMessage::LadderEnter => { /* grab */ }
+            PlayerAudioMessage::LadderExit => { /* release */ }
+            PlayerAudioMessage::ForcedSlideStart => { /* whoosh */ }
+            PlayerAudioMessage::ForcedSlideEnd => { /* stop */ }
         }
     }
 }

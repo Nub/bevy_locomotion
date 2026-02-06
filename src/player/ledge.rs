@@ -6,6 +6,12 @@ use super::input::{CrouchInput, JumpPressed, MoveInput};
 use super::state::*;
 use crate::camera::{CameraPitch, CameraYaw, LedgeClimbBob, LedgeGrabBounce, LedgeShuffleBob};
 
+/// Marker component for walls that allow ledge grabs.
+///
+/// Only entities with this component will be considered as valid ledge grab targets.
+#[derive(Component)]
+pub struct LedgeGrabbable;
+
 /// Detects ledge grabs using a three-ray approach.
 ///
 /// When the player is airborne and moving toward a wall:
@@ -24,8 +30,9 @@ pub fn detect_ledge_grab(
             &mut LedgeCooldown,
             &mut JumpPressed,
         ),
-        (Without<Grounded>, Without<LedgeGrabbing>),
+        (Without<Grounded>, Without<LedgeGrabbing>, Without<OnLadder>),
     >,
+    ledge_query: Query<(), With<LedgeGrabbable>>,
     pitch_query: Query<Entity, With<CameraPitch>>,
     time: Res<Time>,
 ) {
@@ -94,6 +101,11 @@ pub fn detect_ledge_grab(
         let Some(wall_hit) = ray2_hit else {
             continue;
         };
+
+        // Wall must have LedgeGrabbable marker
+        if ledge_query.get(wall_hit.entity).is_err() {
+            continue;
+        }
 
         // Ray 3: downward from above the wall hit point — must HIT with upward normal
         let wall_point = ray2_origin + h_vel.normalize() * wall_hit.distance;

@@ -220,6 +220,10 @@ mod gym_audio {
                 PlayerAudioMessage::LedgeClimbFinished => (handles.ledge_climb_finish.clone(), 0.7),
                 PlayerAudioMessage::WallJumped => (handles.wall_jump.clone(), 0.7),
                 PlayerAudioMessage::SteppedUp => (handles.step_up.clone(), 0.4),
+                PlayerAudioMessage::LadderEnter => (handles.step_up.clone(), 0.5),
+                PlayerAudioMessage::LadderExit => (handles.step_up.clone(), 0.4),
+                PlayerAudioMessage::ForcedSlideStart => (handles.slide_start.clone(), 0.6),
+                PlayerAudioMessage::ForcedSlideEnd => (handles.slide_end.clone(), 0.4),
             };
 
             commands.spawn((
@@ -326,7 +330,7 @@ fn spawn_gymnasium(
 
     // ── Ground ───────────────────────────────────────────────────
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(120.0, 120.0))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(200.0, 200.0))),
         MeshMaterial3d(ground_mat),
         Transform::from_translation(Vec3::ZERO),
         RigidBody::Static,
@@ -335,16 +339,32 @@ fn spawn_gymnasium(
     ));
 
     // ══════════════════════════════════════════════════════════════
-    // SLOPE GALLERY  (north, +Z)
-    // Ramps from 10° to 60° in 5° steps
+    // Layout: each section in its own row along Z, all items
+    // expanding in the +X direction from X = 5.
+    //
+    //   Z =  48  SLOPES        (ramps face +Z uphill, extend to ~60)
+    //   Z =  38  LEDGE GRAB    (walls)
+    //   Z =  30  LADDERS       (walls + sensor volumes)
+    //   Z =  20  JUMPS         (platforms with gaps)
+    //   Z =  10  OBSTACLES     (step-over walls)
+    //   Z =  -8  HEIGHT JUMPS  (elevation pairs)
+    //   Z = -18  CROUCH        (tunnels extend +Z to ~-12)
+    //   Z = -30  SLIDES        (downhill ramps, extend ±8)
+    //   Z = -50  FORCED SLIDES (ramps face +Z uphill, extend to ~-38)
+    // ══════════════════════════════════════════════════════════════
+
+    // ══════════════════════════════════════════════════════════════
+    // SLOPE GALLERY  (Z = 48)
+    // Ramps from 10° to 60° in 5° steps, expanding +X
     // ══════════════════════════════════════════════════════════════
 
     let slope_angles: &[f32] = &[10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 60.0];
-    let slope_base_z = 12.0;
+    let slope_base_x = 5.0;
+    let slope_base_z = 48.0;
     let slope_spacing = 7.0;
 
     for (i, &deg) in slope_angles.iter().enumerate() {
-        let x = (i as f32 - (slope_angles.len() as f32 - 1.0) / 2.0) * slope_spacing;
+        let x = slope_base_x + (i as f32) * slope_spacing;
         let rad = deg.to_radians();
         let ramp_len = 12.0;
         let ramp_rise = (ramp_len / 2.0) * rad.sin();
@@ -362,23 +382,103 @@ fn spawn_gymnasium(
             rad,
         );
 
-        // Label at base of ramp
         spawn_label(&mut commands, &format!("{deg}°"), Vec3::new(x, 1.5, slope_base_z));
     }
 
-    // Section sign
     spawn_label(&mut commands, "SLOPES", Vec3::new(0.0, 2.5, slope_base_z - 2.0));
 
     // ══════════════════════════════════════════════════════════════
-    // JUMP COURSE  (east, +X)
-    // Platforms with increasing gap distances
+    // LEDGE GRAB  (Z = 38)
+    // Walls at various heights for testing ledge detection & climb
+    // ══════════════════════════════════════════════════════════════
+
+    let ledge_heights: &[f32] = &[1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+    let ledge_base_x = 5.0;
+    let ledge_base_z = 38.0;
+    let ledge_spacing = 5.0;
+
+    for (i, &h) in ledge_heights.iter().enumerate() {
+        let x = ledge_base_x + (i as f32) * ledge_spacing;
+        let mat = if i % 2 == 0 { stone_a.clone() } else { stone_b.clone() };
+
+        // Thick wall to grab onto (with LedgeGrabbable marker)
+        let size = Vec3::new(3.0, h, 1.0);
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::new(size.x, size.y, size.z))),
+            MeshMaterial3d(mat),
+            Transform::from_translation(Vec3::new(x, h / 2.0, ledge_base_z)),
+            RigidBody::Static,
+            Collider::cuboid(size.x, size.y, size.z),
+            CollisionLayers::new(GameLayer::World, [GameLayer::Player]),
+            LedgeGrabbable,
+        ));
+
+        spawn_label(&mut commands, &format!("{h}m"), Vec3::new(x, h + 0.5, ledge_base_z));
+    }
+
+    spawn_label(&mut commands, "LEDGE GRAB", Vec3::new(0.0, 5.0, ledge_base_z - 2.0));
+
+    // ══════════════════════════════════════════════════════════════
+    // LADDERS  (Z = 30)
+    // Walls with sensor ladder volumes for climbing
+    // ══════════════════════════════════════════════════════════════
+
+    let ladder_heights: &[f32] = &[4.0, 6.0, 8.0];
+    let ladder_base_x = 5.0;
+    let ladder_base_z = 30.0;
+    let ladder_spacing = 6.0;
+
+    let ladder_mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.55, 0.45, 0.30),
+        perceptual_roughness: 0.9,
+        ..default()
+    });
+
+    for (i, &h) in ladder_heights.iter().enumerate() {
+        let x = ladder_base_x + (i as f32) * ladder_spacing;
+
+        // Back wall
+        spawn_box(
+            &mut commands, &mut meshes, stone_a.clone(),
+            Vec3::new(3.0, h, 0.4),
+            Vec3::new(x, h / 2.0, ladder_base_z),
+        );
+
+        // Ladder sensor volume (slightly in front of wall)
+        let ladder_size = Vec3::new(1.0, h, 0.3);
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::new(ladder_size.x, ladder_size.y, ladder_size.z))),
+            MeshMaterial3d(ladder_mat.clone()),
+            Transform::from_translation(Vec3::new(x, h / 2.0, ladder_base_z - 0.35)),
+            RigidBody::Static,
+            Collider::cuboid(ladder_size.x, ladder_size.y, ladder_size.z),
+            CollisionLayers::new(GameLayer::Trigger, [GameLayer::Player]),
+            Sensor,
+            Ladder,
+        ));
+
+        // Platform on top
+        spawn_box(
+            &mut commands, &mut meshes, stone_b.clone(),
+            Vec3::new(3.0, 0.3, 2.0),
+            Vec3::new(x, h + 0.15, ladder_base_z + 1.0),
+        );
+
+        spawn_label(&mut commands, &format!("{h}m"), Vec3::new(x, h + 1.0, ladder_base_z - 1.5));
+    }
+
+    spawn_label(&mut commands, "LADDERS", Vec3::new(0.0, 9.0, ladder_base_z - 2.0));
+
+    // ══════════════════════════════════════════════════════════════
+    // JUMP COURSE  (Z = 20)
+    // Platforms with increasing gap distances, expanding +X
     // ══════════════════════════════════════════════════════════════
 
     let jump_gaps: &[f32] = &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
-    let jump_start_x = 10.0;
+    let jump_start_x = 5.0;
     let platform_size = Vec3::new(3.0, 0.6, 3.0);
-    let jump_z = 0.0;
-    let jump_h = 0.3; // platform center y
+    let jump_z = 20.0;
+    let jump_h = 0.3;
 
     let mut cursor_x = jump_start_x;
 
@@ -389,7 +489,6 @@ fn spawn_gymnasium(
             Vec3::new(cursor_x, jump_h, jump_z),
         );
 
-        // Label the gap (between this platform and the next)
         let label_x = cursor_x + platform_size.x / 2.0 + gap / 2.0;
         spawn_label(&mut commands, &format!("{gap}m gap"), Vec3::new(label_x, 1.5, jump_z));
 
@@ -399,19 +498,20 @@ fn spawn_gymnasium(
     spawn_box(&mut commands, &mut meshes, accent.clone(),
         platform_size, Vec3::new(cursor_x, jump_h, jump_z));
 
-    spawn_label(&mut commands, "JUMPS", Vec3::new(jump_start_x, 2.5, jump_z - 3.0));
+    spawn_label(&mut commands, "JUMPS", Vec3::new(0.0, 2.5, jump_z - 2.0));
 
     // ══════════════════════════════════════════════════════════════
-    // OBSTACLE COURSE  (south, -Z)
-    // Walls of increasing height
+    // OBSTACLE COURSE  (Z = 10)
+    // Walls of increasing height, expanding +X
     // ══════════════════════════════════════════════════════════════
 
     let wall_heights: &[f32] = &[0.3, 0.5, 0.7, 1.0, 1.3, 1.5, 1.8, 2.0, 2.5];
-    let obstacle_base_z = -10.0;
+    let obstacle_base_x = 5.0;
+    let obstacle_base_z = 10.0;
     let obstacle_spacing = 4.0;
 
     for (i, &h) in wall_heights.iter().enumerate() {
-        let x = (i as f32 - (wall_heights.len() as f32 - 1.0) / 2.0) * obstacle_spacing;
+        let x = obstacle_base_x + (i as f32) * obstacle_spacing;
         let mat = if i % 2 == 0 { stone_a.clone() } else { stone_b.clone() };
         spawn_box(&mut commands, &mut meshes, mat,
             Vec3::new(2.0, h, 0.4),
@@ -424,53 +524,8 @@ fn spawn_gymnasium(
     spawn_label(&mut commands, "OBSTACLES", Vec3::new(0.0, 3.5, obstacle_base_z - 2.0));
 
     // ══════════════════════════════════════════════════════════════
-    // CROUCH TUNNELS  (west, -X)
-    // Corridors with decreasing ceiling clearance
-    // ══════════════════════════════════════════════════════════════
-
-    let clearances: &[f32] = &[1.8, 1.5, 1.2, 1.0, 0.8];
-    let tunnel_start_x = -8.0;
-    let tunnel_z = 0.0;
-    let tunnel_width = 3.0;
-    let tunnel_depth = 6.0;
-
-    for (i, &clearance) in clearances.iter().enumerate() {
-        let z = tunnel_z + (i as f32) * (tunnel_depth + 1.0);
-        let floor_h = 0.3;
-
-        // Floor
-        spawn_box(&mut commands, &mut meshes, stone_a.clone(),
-            Vec3::new(tunnel_width, floor_h, tunnel_depth),
-            Vec3::new(tunnel_start_x, floor_h / 2.0, z),
-        );
-
-        // Ceiling
-        let ceil_y = floor_h + clearance + 0.15;
-        spawn_box(&mut commands, &mut meshes, ceiling_mat.clone(),
-            Vec3::new(tunnel_width, 0.3, tunnel_depth),
-            Vec3::new(tunnel_start_x, ceil_y, z),
-        );
-
-        // Side walls
-        for side in [-1.0, 1.0] {
-            spawn_box(&mut commands, &mut meshes, stone_b.clone(),
-                Vec3::new(0.2, clearance + 0.5, tunnel_depth),
-                Vec3::new(tunnel_start_x + side * (tunnel_width / 2.0 + 0.1), (clearance + 0.5) / 2.0 + floor_h, z),
-            );
-        }
-
-        spawn_label(
-            &mut commands,
-            &format!("{clearance}m clear"),
-            Vec3::new(tunnel_start_x, ceil_y + 0.5, z),
-        );
-    }
-
-    spawn_label(&mut commands, "CROUCH", Vec3::new(tunnel_start_x, 3.0, tunnel_z - 4.0));
-
-    // ══════════════════════════════════════════════════════════════
-    // VARIABLE HEIGHT JUMPS  (southeast)
-    // Same gap, different elevation changes
+    // VARIABLE HEIGHT JUMPS  (Z = -8)
+    // Same gap, different elevation changes, expanding +X
     // ══════════════════════════════════════════════════════════════
 
     let height_jumps: &[(f32, f32)] = &[
@@ -481,8 +536,8 @@ fn spawn_gymnasium(
         (1.0, 2.0),   // up 1m
         (2.0, 1.0),   // down 1m
     ];
-    let vj_base_x = 12.0;
-    let vj_base_z = -20.0;
+    let vj_base_x = 5.0;
+    let vj_base_z = -8.0;
 
     let mut vj_x = vj_base_x;
     for (i, &(from_h, to_h)) in height_jumps.iter().enumerate() {
@@ -510,19 +565,66 @@ fn spawn_gymnasium(
         vj_x += 2.5 + gap + 2.5 + 3.0;
     }
 
-    spawn_label(&mut commands, "HEIGHT JUMPS", Vec3::new(vj_base_x + 15.0, 4.0, vj_base_z - 3.0));
+    spawn_label(&mut commands, "HEIGHT JUMPS", Vec3::new(0.0, 4.0, vj_base_z - 2.0));
 
     // ══════════════════════════════════════════════════════════════
-    // SLIDE COURSE  (southwest, -X -Z)
-    // Downhill ramps for sprint-slide testing
+    // CROUCH TUNNELS  (Z = -18)
+    // Corridors with decreasing ceiling clearance, expanding +X
+    // ══════════════════════════════════════════════════════════════
+
+    let clearances: &[f32] = &[1.8, 1.5, 1.2, 1.0, 0.8];
+    let tunnel_base_x = 5.0;
+    let tunnel_base_z = -18.0;
+    let tunnel_spacing = 5.0;
+    let tunnel_width = 3.0;
+    let tunnel_depth = 6.0;
+
+    for (i, &clearance) in clearances.iter().enumerate() {
+        let x = tunnel_base_x + (i as f32) * tunnel_spacing;
+        let floor_h = 0.3;
+
+        // Floor
+        spawn_box(&mut commands, &mut meshes, stone_a.clone(),
+            Vec3::new(tunnel_width, floor_h, tunnel_depth),
+            Vec3::new(x, floor_h / 2.0, tunnel_base_z),
+        );
+
+        // Ceiling
+        let ceil_y = floor_h + clearance + 0.15;
+        spawn_box(&mut commands, &mut meshes, ceiling_mat.clone(),
+            Vec3::new(tunnel_width, 0.3, tunnel_depth),
+            Vec3::new(x, ceil_y, tunnel_base_z),
+        );
+
+        // Side walls
+        for side in [-1.0, 1.0] {
+            spawn_box(&mut commands, &mut meshes, stone_b.clone(),
+                Vec3::new(0.2, clearance + 0.5, tunnel_depth),
+                Vec3::new(x + side * (tunnel_width / 2.0 + 0.1), (clearance + 0.5) / 2.0 + floor_h, tunnel_base_z),
+            );
+        }
+
+        spawn_label(
+            &mut commands,
+            &format!("{clearance}m clear"),
+            Vec3::new(x, ceil_y + 0.5, tunnel_base_z),
+        );
+    }
+
+    spawn_label(&mut commands, "CROUCH", Vec3::new(0.0, 3.0, tunnel_base_z - 2.0));
+
+    // ══════════════════════════════════════════════════════════════
+    // SLIDE COURSE  (Z = -30)
+    // Downhill ramps for sprint-slide testing, expanding +X
     // ══════════════════════════════════════════════════════════════
 
     let slide_angles: &[f32] = &[5.0, 10.0, 15.0, 20.0, 30.0];
-    let slide_base_z = -20.0;
-    let slide_base_x = -10.0;
+    let slide_base_x = 5.0;
+    let slide_base_z = -30.0;
+    let slide_spacing = 8.0;
 
     for (i, &deg) in slide_angles.iter().enumerate() {
-        let z = slide_base_z - (i as f32) * 8.0;
+        let x = slide_base_x + (i as f32) * slide_spacing;
         let rad = deg.to_radians();
         let mat = materials.add(StandardMaterial {
             base_color: ramp_color(deg),
@@ -533,40 +635,58 @@ fn spawn_gymnasium(
         spawn_ramp(
             &mut commands, &mut meshes, mat,
             Vec3::new(4.0, 0.25, 16.0),
-            Vec3::new(slide_base_x, -0.5, z),
+            Vec3::new(x, -0.5, slide_base_z),
             -rad, // downhill
         );
 
-        spawn_label(&mut commands, &format!("-{deg}° slide"), Vec3::new(slide_base_x, 1.5, z + 9.0));
+        spawn_label(&mut commands, &format!("-{deg}° slide"), Vec3::new(x, 1.5, slide_base_z + 9.0));
     }
 
-    spawn_label(&mut commands, "SLIDES", Vec3::new(slide_base_x, 3.0, slide_base_z + 5.0));
+    spawn_label(&mut commands, "SLIDES", Vec3::new(0.0, 3.0, slide_base_z - 2.0));
 
     // ══════════════════════════════════════════════════════════════
-    // LEDGE GRAB  (northeast, +X +Z)
-    // Walls at various heights for testing ledge detection & climb
+    // FORCED SLIDES  (Z = -50)
+    // Ramps with ForceSlide marker that push the player downhill
     // ══════════════════════════════════════════════════════════════
 
-    let ledge_heights: &[f32] = &[1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
-    let ledge_base_x = 10.0;
-    let ledge_base_z = 15.0;
-    let ledge_spacing = 5.0;
+    let fslide_angles: &[f32] = &[15.0, 25.0, 35.0, 45.0];
+    let fslide_base_x = 5.0;
+    let fslide_base_z = -50.0;
+    let fslide_spacing = 8.0;
 
-    for (i, &h) in ledge_heights.iter().enumerate() {
-        let x = ledge_base_x + (i as f32) * ledge_spacing;
-        let mat = if i % 2 == 0 { stone_a.clone() } else { stone_b.clone() };
+    for (i, &deg) in fslide_angles.iter().enumerate() {
+        let x = fslide_base_x + (i as f32) * fslide_spacing;
+        let rad = deg.to_radians();
+        let ramp_len = 12.0;
+        let ramp_rise = (ramp_len / 2.0) * rad.sin();
 
-        // Thick wall to grab onto
-        spawn_box(
-            &mut commands, &mut meshes, mat,
-            Vec3::new(3.0, h, 1.0),
-            Vec3::new(x, h / 2.0, ledge_base_z),
+        let mat = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.6, 0.3, 0.3),
+            perceptual_roughness: 0.6,
+            ..default()
+        });
+
+        // Ramp with ForceSlide marker
+        let size = Vec3::new(5.0, 0.25, ramp_len);
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::new(size.x, size.y, size.z))),
+            MeshMaterial3d(mat),
+            Transform::from_translation(Vec3::new(x, ramp_rise, fslide_base_z + ramp_len / 2.0))
+                .with_rotation(Quat::from_rotation_x(rad)),
+            RigidBody::Static,
+            Collider::cuboid(size.x, size.y, size.z),
+            CollisionLayers::new(GameLayer::World, [GameLayer::Player]),
+            ForceSlide,
+        ));
+
+        spawn_label(
+            &mut commands,
+            &format!("{deg}° slide"),
+            Vec3::new(x, 1.5, fslide_base_z),
         );
-
-        spawn_label(&mut commands, &format!("{h}m"), Vec3::new(x, h + 0.5, ledge_base_z));
     }
 
-    spawn_label(&mut commands, "LEDGE GRAB", Vec3::new(ledge_base_x + 12.0, 5.0, ledge_base_z - 3.0));
+    spawn_label(&mut commands, "FORCED SLIDES", Vec3::new(0.0, 4.0, fslide_base_z - 2.0));
 
     // ══════════════════════════════════════════════════════════════
     // LIGHTING

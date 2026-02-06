@@ -26,7 +26,10 @@ pub fn update_grounded_state(
         // Raycast from center of capsule downward
         let ray_origin = transform.translation;
         let ray_dir = Dir3::NEG_Y;
-        let ground_check_dist = config.stand_height / 2.0 + 0.1;
+        // The capsule's curved bottom sits higher above slopes than flat ground.
+        // Vertical distance from center to slope = (halfHeight - radius) + radius/cos(angle).
+        // Using radius as the margin handles slopes up to ~60°.
+        let ground_check_dist = config.stand_height / 2.0 + config.radius;
 
         let filter = SpatialQueryFilter::default()
             .with_mask(config.world_layer);
@@ -39,8 +42,14 @@ pub fn update_grounded_state(
             &filter,
         );
 
+        let min_ground_normal_y = config.max_slope_angle.to_radians().cos();
+
         let is_grounded = hit.as_ref()
-            .is_some_and(|h| h.distance < ground_check_dist && player_vel.y < 1.0);
+            .is_some_and(|h| {
+                h.distance < ground_check_dist
+                    && player_vel.y < 1.0
+                    && h.normal.dot(Vec3::Y) >= min_ground_normal_y
+            });
 
         if is_grounded {
             let normal = hit.unwrap().normal;
@@ -78,7 +87,7 @@ pub fn ground_movement(
             Has<Sprinting>,
             Has<Crouching>,
         ),
-        (With<Grounded>, Without<Sliding>),
+        (With<Grounded>, Without<Sliding>, Without<ForcedSliding>, Without<OnLadder>),
     >,
     yaw_query: Query<&Transform, With<CameraYaw>>,
     time: Res<Time>,
@@ -125,7 +134,7 @@ pub fn ground_movement(
 pub fn air_movement(
     mut query: Query<
         (&MoveInput, &PlayerConfig, &mut PlayerVelocity),
-        (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>),
+        (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>, Without<OnLadder>),
     >,
     yaw_query: Query<&Transform, With<CameraYaw>>,
     time: Res<Time>,
@@ -166,7 +175,7 @@ pub fn air_movement(
 
 /// Applies gravity when not grounded
 pub fn apply_gravity(
-    mut query: Query<&mut PlayerVelocity, (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>)>,
+    mut query: Query<&mut PlayerVelocity, (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>, Without<OnLadder>)>,
     gravity: Res<Gravity>,
     time: Res<Time>,
 ) {

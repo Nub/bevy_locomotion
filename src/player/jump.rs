@@ -21,17 +21,20 @@ pub fn update_last_slide(
 /// Handles jump input with coyote time and jump buffering
 pub fn handle_jump(
     mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &PlayerConfig,
-        &mut PlayerVelocity,
-        &mut JumpBuffer,
-        &mut CoyoteTime,
-        &mut JumpPressed,
-        &mut LastSlide,
-        Option<&Grounded>,
-        Option<&Sliding>,
-    )>,
+    mut query: Query<
+        (
+            Entity,
+            &PlayerConfig,
+            &mut PlayerVelocity,
+            &mut JumpBuffer,
+            &mut CoyoteTime,
+            &mut JumpPressed,
+            &mut LastSlide,
+            Option<&Grounded>,
+            Option<&Sliding>,
+        ),
+        Without<OnLadder>,
+    >,
     time: Res<Time>,
 ) {
     for (entity, config, mut velocity, mut buffer, mut coyote, mut jump_pressed, mut last_slide, grounded, sliding) in
@@ -75,6 +78,7 @@ pub fn handle_jump(
             commands.entity(entity).remove::<Grounded>();
             commands.entity(entity).remove::<JumpCut>();
             commands.entity(entity).remove::<Sliding>();
+            commands.entity(entity).remove::<ForcedSliding>();
             commands.entity(entity).remove::<Crouching>();
         }
     }

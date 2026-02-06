@@ -29,8 +29,9 @@ pub mod prelude {
     pub use crate::camera::{CameraConfig, CameraPlugin, FpsCamera};
     pub use crate::physics::{GameLayer, PhysicsPlugin};
     pub use crate::player::{
-        spawn_player, Crouching, Grounded, LedgeClimbing, LedgeGrabbing, Player,
-        PlayerAudioMessage, PlayerConfig, PlayerPlugin, PlayerVelocity, Sliding, Sprinting,
+        spawn_player, Crouching, ForceSlide, ForcedSliding, Grounded, Ladder, LedgeClimbing,
+        LedgeGrabbable, LedgeGrabbing, OnLadder, Player, PlayerAudioMessage, PlayerConfig,
+        PlayerPlugin, PlayerVelocity, Sliding, Sprinting,
     };
     pub use crate::BevyLocomotionPlugin;
 }

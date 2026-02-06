@@ -4,6 +4,7 @@ use bevy_enhanced_input::prelude::*;
 
 use super::audio::*;
 use super::crouch::*;
+use super::forceslide::*;
 use super::input::{
     clear_look_input, handle_crouch_end, handle_crouch_start, handle_jump_end, handle_jump_start,
     handle_look_input, handle_move_end, handle_move_input, handle_sprint_end, handle_sprint_start,
@@ -11,6 +12,7 @@ use super::input::{
     MoveAction, MoveInput, SprintAction, SprintInput,
 };
 use super::jump::*;
+use super::ladder::*;
 use super::ledge::*;
 use super::movement::*;
 use super::state::*;
@@ -48,23 +50,33 @@ impl Plugin for PlayerPlugin {
         app.add_systems(
             FixedUpdate,
             (
-                update_grounded_state,
-                update_sprint_state,
-                update_crouch_state,
-                update_last_slide,
-                detect_ledge_grab,
-                apply_ledge_grab,
-                animate_ledge_climb,
-                handle_jump,
-                variable_jump_height,
-                ground_movement,
-                apply_step_up,
-                air_movement,
-                apply_slide,
-                apply_gravity,
-                apply_velocity,
-                update_collider_height,
-                emit_player_audio_messages,
+                (
+                    update_grounded_state,
+                    detect_forced_slide,
+                    update_sprint_state,
+                    update_crouch_state,
+                    update_last_slide,
+                    detect_ladder,
+                    detect_ledge_grab,
+                    apply_ledge_grab,
+                    animate_ledge_climb,
+                    handle_jump,
+                )
+                    .chain(),
+                (
+                    variable_jump_height,
+                    ground_movement,
+                    apply_forced_slide,
+                    apply_ladder_movement,
+                    apply_step_up,
+                    air_movement,
+                    apply_slide,
+                    apply_gravity,
+                    apply_velocity,
+                    update_collider_height,
+                    emit_player_audio_messages,
+                )
+                    .chain(),
             )
                 .chain(),
         );

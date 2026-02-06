@@ -18,6 +18,10 @@ pub enum PlayerAudioMessage {
     LedgeClimbFinished,
     WallJumped,
     SteppedUp,
+    LadderEnter,
+    LadderExit,
+    ForcedSlideStart,
+    ForcedSlideEnd,
 }
 
 /// Tracks previous-frame state for edge detection in audio event emission.
@@ -27,6 +31,8 @@ pub struct AudioTracker {
     pub was_sliding: bool,
     pub was_ledge_grabbing: bool,
     pub was_ledge_climbing: bool,
+    pub was_on_ladder: bool,
+    pub was_forced_sliding: bool,
     pub last_vertical_velocity: f32,
     pub footstep_timer: f32,
 }
@@ -42,6 +48,8 @@ pub fn emit_player_audio_messages(
             Has<Sliding>,
             Has<LedgeGrabbing>,
             Has<LedgeClimbing>,
+            Has<OnLadder>,
+            Has<ForcedSliding>,
         ),
         With<Player>,
     >,
@@ -51,7 +59,7 @@ pub fn emit_player_audio_messages(
 ) {
     let dt = time.delta_secs();
 
-    let Ok((config, velocity, grounded, sliding, ledge_grabbing, ledge_climbing)) =
+    let Ok((config, velocity, grounded, sliding, ledge_grabbing, ledge_climbing, on_ladder, forced_sliding)) =
         query.single()
     else {
         return;
@@ -113,10 +121,28 @@ pub fn emit_player_audio_messages(
         writer.write(PlayerAudioMessage::LedgeClimbFinished);
     }
 
+    // --- Ladder ---
+    if !tracker.was_on_ladder && on_ladder {
+        writer.write(PlayerAudioMessage::LadderEnter);
+    }
+    if tracker.was_on_ladder && !on_ladder {
+        writer.write(PlayerAudioMessage::LadderExit);
+    }
+
+    // --- Forced slide ---
+    if !tracker.was_forced_sliding && forced_sliding {
+        writer.write(PlayerAudioMessage::ForcedSlideStart);
+    }
+    if tracker.was_forced_sliding && !forced_sliding {
+        writer.write(PlayerAudioMessage::ForcedSlideEnd);
+    }
+
     // --- Update tracker ---
     tracker.was_grounded = grounded;
     tracker.was_sliding = sliding;
     tracker.was_ledge_grabbing = ledge_grabbing;
     tracker.was_ledge_climbing = ledge_climbing;
+    tracker.was_on_ladder = on_ladder;
+    tracker.was_forced_sliding = forced_sliding;
     tracker.last_vertical_velocity = velocity.y;
 }

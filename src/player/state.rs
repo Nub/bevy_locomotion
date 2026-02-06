@@ -66,6 +66,10 @@ pub struct PlayerConfig {
     pub ledge_grab_max_fall_speed: f32,
     /// Whether ledge grab triggers while the player is moving upward
     pub ledge_grab_ascending: bool,
+    /// Ladder climbing speed in m/s
+    pub ladder_climb_speed: f32,
+    /// Maximum walkable slope angle in degrees (steeper slopes cause the player to slide off)
+    pub max_slope_angle: f32,
     /// Maximum height of obstacles the player can auto-step over (m)
     pub step_up_height: f32,
     /// Physics layer the player body belongs to
@@ -107,6 +111,8 @@ impl Default for PlayerConfig {
             ledge_cooldown: 0.4,
             ledge_grab_max_fall_speed: 10.0,
             ledge_grab_ascending: false,
+            ladder_climb_speed: 4.0,
+            max_slope_angle: 39.0,
             step_up_height: 0.35,
             player_layer: GameLayer::Player.into(),
             world_layer: GameLayer::World.into(),
@@ -201,6 +207,24 @@ pub struct AirTime {
 pub struct LedgeGrabbing {
     pub surface_point: Vec3,
     pub wall_normal: Vec3,
+}
+
+/// Marker: player is on a ladder
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct OnLadder {
+    /// Outward-facing normal from the ladder surface toward the player
+    pub outward_normal: Vec3,
+}
+
+/// Marker: player is being forced to slide down a surface
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct ForcedSliding {
+    /// Downhill direction on the slope surface
+    pub direction: Vec3,
+    /// Normal of the slope surface
+    pub surface_normal: Vec3,
 }
 
 /// Cooldown timer before ledge re-grab is allowed
