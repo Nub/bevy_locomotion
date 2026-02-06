@@ -10,7 +10,7 @@ Add the dependency:
 
 ```toml
 [dependencies]
-bevy_locomotion = { path = "../bevy_locomotion" }
+bevy_locomotion = { git = "https://github.com/Nub/bevy_locomotion" }
 ```
 
 Minimal example:
