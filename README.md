@@ -1,4 +1,4 @@
-# player_controller
+# bevy_locomotion
 
 A first-person character controller for Bevy 0.18 and Avian3d. Provides a
 complete movement system with walking, sprinting, crouching, sliding,
@@ -10,7 +10,7 @@ Add the dependency:
 
 ```toml
 [dependencies]
-player_controller = { path = "../player_controller" }
+bevy_locomotion = { path = "../bevy_locomotion" }
 ```
 
 Minimal example:
@@ -18,12 +18,12 @@ Minimal example:
 ```rust
 use avian3d::prelude::*;
 use bevy::prelude::*;
-use player_controller::prelude::*;
+use bevy_locomotion::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(PlayerControllerPlugin)
+        .add_plugins(BevyLocomotionPlugin)
         .add_systems(Startup, setup)
         .run();
 }
@@ -53,7 +53,7 @@ fn setup(
 }
 ```
 
-`PlayerControllerPlugin` bundles physics (Avian3d), player systems, and
+`BevyLocomotionPlugin` bundles physics (Avian3d), player systems, and
 camera management. Call `spawn_player` to create the player entity with all
 required components, a camera hierarchy, and default WASD+mouse input
 bindings.

@@ -1,5 +1,5 @@
 [package]
-name = "player_controller"
+name = "bevy_locomotion"
 version = "0.1.0"
 edition = "2024"
 

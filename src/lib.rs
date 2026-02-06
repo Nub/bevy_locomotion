@@ -9,9 +9,9 @@ pub use player::PlayerPlugin;
 use bevy::prelude::*;
 
 /// Unified plugin that adds physics, player controller, and camera systems.
-pub struct PlayerControllerPlugin;
+pub struct BevyLocomotionPlugin;
 
-impl Plugin for PlayerControllerPlugin {
+impl Plugin for BevyLocomotionPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<PhysicsPlugin>() {
             app.add_plugins(PhysicsPlugin);
@@ -32,5 +32,5 @@ pub mod prelude {
         spawn_player, Crouching, Grounded, LedgeClimbing, LedgeGrabbing, Player,
         PlayerAudioMessage, PlayerConfig, PlayerPlugin, PlayerVelocity, Sliding, Sprinting,
     };
-    pub use crate::PlayerControllerPlugin;
+    pub use crate::BevyLocomotionPlugin;
 }

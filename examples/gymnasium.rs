@@ -1,6 +1,6 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
-use player_controller::prelude::*;
+use bevy_locomotion::prelude::*;
 
 fn main() {
     let mut app = App::new();
@@ -11,7 +11,7 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(PlayerControllerPlugin)
+        .add_plugins(BevyLocomotionPlugin)
         .init_resource::<JumpTracker>()
         .add_systems(Startup, (setup, spawn_hud));
 
@@ -164,7 +164,7 @@ fn spawn_label(commands: &mut Commands, text: &str, world_pos: Vec3) {
 #[cfg(feature = "gym-audio")]
 mod gym_audio {
     use bevy::prelude::*;
-    use player_controller::prelude::*;
+    use bevy_locomotion::prelude::*;
 
     #[derive(Resource)]
     pub struct AudioHandles {
