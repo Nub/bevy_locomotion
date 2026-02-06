@@ -85,7 +85,7 @@ pub fn variable_jump_height(
     mut commands: Commands,
     mut query: Query<
         (Entity, &JumpHeld, &PlayerConfig, &mut PlayerVelocity),
-        (Without<Grounded>, Without<JumpCut>),
+        (Without<Grounded>, Without<JumpCut>, Without<LedgeGrabbing>, Without<LedgeClimbing>),
     >,
 ) {
     for (entity, jump_held, config, mut velocity) in &mut query {

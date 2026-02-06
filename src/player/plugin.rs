@@ -10,6 +10,7 @@ use super::input::{
     MoveAction, MoveInput, SprintAction, SprintInput,
 };
 use super::jump::*;
+use super::ledge::*;
 use super::movement::*;
 use super::state::*;
 use crate::camera::{CameraConfig, CameraPitch, CameraYaw, FpsCamera, PitchAngle};
@@ -46,6 +47,9 @@ impl Plugin for PlayerPlugin {
                 update_sprint_state,
                 update_crouch_state,
                 update_last_slide,
+                detect_ledge_grab,
+                apply_ledge_grab,
+                animate_ledge_climb,
                 handle_jump,
                 variable_jump_height,
                 ground_movement,
@@ -115,6 +119,7 @@ pub fn spawn_player(commands: &mut Commands, config: PlayerConfig, position: Vec
             AirTime::default(),
             SprintGrace::default(),
             LastSlide::default(),
+            LedgeCooldown::default(),
         ))
         .insert((
             // Input state

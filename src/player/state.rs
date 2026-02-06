@@ -49,6 +49,20 @@ pub struct PlayerConfig {
     pub slide_jump_grace: f32,
     /// Maximum horizontal speed (m/s), 0.0 = uncapped
     pub max_horizontal_speed: f32,
+    /// Forward probe distance past capsule surface for ledge detection
+    pub ledge_detect_reach: f32,
+    /// Duration of the animated ledge climb in seconds
+    pub ledge_climb_duration: f32,
+    /// Ledge shuffle speed in m/s
+    pub ledge_shuffle_speed: f32,
+    /// Ledge shuffle head bob amplitude in meters
+    pub ledge_shuffle_bob_amplitude: f32,
+    /// Seconds before re-grab is allowed after releasing a ledge
+    pub ledge_cooldown: f32,
+    /// Maximum downward speed at which ledge grab is allowed (m/s), 0.0 = uncapped
+    pub ledge_grab_max_fall_speed: f32,
+    /// Whether ledge grab triggers while the player is moving upward
+    pub ledge_grab_ascending: bool,
 }
 
 impl Default for PlayerConfig {
@@ -75,6 +89,13 @@ impl Default for PlayerConfig {
             slide_jump_boost: 3.0,
             slide_jump_grace: 0.2,
             max_horizontal_speed: 20.0,
+            ledge_detect_reach: 0.6,
+            ledge_climb_duration: 1.05,
+            ledge_shuffle_speed: 1.75,
+            ledge_shuffle_bob_amplitude: 0.006,
+            ledge_cooldown: 0.4,
+            ledge_grab_max_fall_speed: 10.0,
+            ledge_grab_ascending: false,
         }
     }
 }
@@ -156,5 +177,30 @@ pub struct JumpBuffer {
 /// Tracks the last time player was grounded (for fall damage, landing effects)
 #[derive(Component, Default)]
 pub struct AirTime {
+    pub duration: f32,
+}
+
+/// Marker: player is grabbing a ledge
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct LedgeGrabbing {
+    pub surface_point: Vec3,
+    pub wall_normal: Vec3,
+}
+
+/// Cooldown timer before ledge re-grab is allowed
+#[derive(Component, Default)]
+pub struct LedgeCooldown {
+    pub timer: f32,
+}
+
+/// Active ledge climb animation state
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct LedgeClimbing {
+    pub start_pos: Vec3,
+    pub end_pos: Vec3,
+    pub wall_normal: Vec3,
+    pub elapsed: f32,
     pub duration: f32,
 }

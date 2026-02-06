@@ -58,6 +58,13 @@ pub fn update_grounded_state(
             }
             coyote.timer += dt;
             air_time.duration += dt;
+
+            // If vertical velocity is near zero while airborne, the player is
+            // likely resting on an edge the center ray missed — keep coyote
+            // alive so they can still jump and move.
+            if player_vel.y.abs() < 0.5 {
+                coyote.timer = 0.0;
+            }
         }
     }
 }
@@ -117,7 +124,10 @@ pub fn ground_movement(
 
 /// Applies air movement with reduced control
 pub fn air_movement(
-    mut query: Query<(&MoveInput, &PlayerConfig, &mut PlayerVelocity), Without<Grounded>>,
+    mut query: Query<
+        (&MoveInput, &PlayerConfig, &mut PlayerVelocity),
+        (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>),
+    >,
     yaw_query: Query<&Transform, With<CameraYaw>>,
     time: Res<Time>,
 ) {
@@ -139,9 +149,16 @@ pub fn air_movement(
 
         let move_dir = (forward * input.y + right * input.x).normalize_or_zero();
 
+        // Use ground accel when resting on an edge (near-zero vertical velocity)
+        let accel = if velocity.y.abs() < 0.5 {
+            config.ground_accel
+        } else {
+            config.air_accel
+        };
+
         let current_speed = velocity.dot(move_dir);
         let add_speed = (config.walk_speed - current_speed).max(0.0);
-        let accel_speed = (config.air_accel * dt).min(add_speed);
+        let accel_speed = (accel * dt).min(add_speed);
 
         velocity.x += move_dir.x * accel_speed;
         velocity.z += move_dir.z * accel_speed;
@@ -150,7 +167,7 @@ pub fn air_movement(
 
 /// Applies gravity when not grounded
 pub fn apply_gravity(
-    mut query: Query<&mut PlayerVelocity, Without<Grounded>>,
+    mut query: Query<&mut PlayerVelocity, (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>)>,
     gravity: Res<Gravity>,
     time: Res<Time>,
 ) {

@@ -461,6 +461,32 @@ fn spawn_gymnasium(
     spawn_label(&mut commands, "SLIDES", Vec3::new(slide_base_x, 3.0, slide_base_z + 5.0));
 
     // ══════════════════════════════════════════════════════════════
+    // LEDGE GRAB  (northeast, +X +Z)
+    // Walls at various heights for testing ledge detection & climb
+    // ══════════════════════════════════════════════════════════════
+
+    let ledge_heights: &[f32] = &[1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+    let ledge_base_x = 10.0;
+    let ledge_base_z = 15.0;
+    let ledge_spacing = 5.0;
+
+    for (i, &h) in ledge_heights.iter().enumerate() {
+        let x = ledge_base_x + (i as f32) * ledge_spacing;
+        let mat = if i % 2 == 0 { stone_a.clone() } else { stone_b.clone() };
+
+        // Thick wall to grab onto
+        spawn_box(
+            &mut commands, &mut meshes, mat,
+            Vec3::new(3.0, h, 1.0),
+            Vec3::new(x, h / 2.0, ledge_base_z),
+        );
+
+        spawn_label(&mut commands, &format!("{h}m"), Vec3::new(x, h + 0.5, ledge_base_z));
+    }
+
+    spawn_label(&mut commands, "LEDGE GRAB", Vec3::new(ledge_base_x + 12.0, 5.0, ledge_base_z - 3.0));
+
+    // ══════════════════════════════════════════════════════════════
     // LIGHTING
     // ══════════════════════════════════════════════════════════════
 

@@ -1,6 +1,7 @@
 mod crouch;
 pub mod input;
 mod jump;
+mod ledge;
 mod movement;
 pub(crate) mod plugin;
 mod state;

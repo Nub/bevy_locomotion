@@ -5,6 +5,32 @@ use crate::player::{Crouching, Grounded, Player, PlayerConfig, PlayerVelocity};
 
 use super::CameraPitch;
 
+/// Damped vertical bounce on ledge grab to sell impact weight
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct LedgeGrabBounce {
+    pub elapsed: f32,
+    pub duration: f32,
+}
+
+/// Head bob while shuffling sideways on a ledge
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct LedgeShuffleBob {
+    pub timer: f32,
+    pub amplitude: f32,
+}
+
+/// Camera pitch bob during ledge climb animation
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct LedgeClimbBob {
+    pub elapsed: f32,
+    pub duration: f32,
+    /// -1.0 or 1.0 — which direction to roll during the climb
+    pub roll_sign: f32,
+}
+
 /// FPS camera marker with effect settings
 #[derive(Component)]
 pub struct FpsCamera {
@@ -189,5 +215,49 @@ pub fn update_camera_height(
         // Smooth transition
         transform.translation.y +=
             (target_height - transform.translation.y) * 10.0 * time.delta_secs();
+    }
+}
+
+/// Applies a damped vertical bounce to the camera on ledge grab.
+/// Runs after `update_camera_height` so the offset layers on top.
+pub fn apply_ledge_grab_bounce(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut LedgeGrabBounce), With<CameraPitch>>,
+    time: Res<Time>,
+) {
+    for (entity, mut transform, mut bounce) in &mut query {
+        bounce.elapsed += time.delta_secs();
+        if bounce.elapsed >= bounce.duration {
+            commands.entity(entity).remove::<LedgeGrabBounce>();
+            continue;
+        }
+        let t = bounce.elapsed / bounce.duration;
+        // Damped sine: quick dip down, small overshoot up, settle
+        let offset = (-6.0 * t).exp() * (t * std::f32::consts::TAU * 1.5).sin() * -0.07;
+        transform.translation.y += offset;
+    }
+}
+
+/// Applies vertical bob while shuffling on a ledge
+pub fn apply_ledge_shuffle_bob(
+    mut query: Query<(&mut Transform, &LedgeShuffleBob), With<CameraPitch>>,
+) {
+    for (mut transform, bob) in &mut query {
+        let offset = (bob.timer * 10.0).sin() * bob.amplitude;
+        transform.translation.y += offset;
+    }
+}
+
+/// Advances the ledge climb bob timer and removes the component when done
+pub fn apply_ledge_climb_bob(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut LedgeClimbBob), With<CameraPitch>>,
+    time: Res<Time>,
+) {
+    for (entity, mut bob) in &mut query {
+        bob.elapsed += time.delta_secs();
+        if bob.elapsed >= bob.duration {
+            commands.entity(entity).remove::<LedgeClimbBob>();
+        }
     }
 }
