@@ -8,6 +8,10 @@ bevy = "0.18"
 avian3d = "0.5"
 bevy_enhanced_input = "0.23"
 
+[[example]]
+name = "gymnasium"
+path = "examples/gymnasium.rs"
+
 [features]
 dev = ["bevy/dynamic_linking"]
 

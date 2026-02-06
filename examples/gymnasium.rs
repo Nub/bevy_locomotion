@@ -1,19 +1,31 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
+use player_controller::prelude::*;
 
-use crate::camera::FpsCamera;
-use crate::physics::GameLayer;
-use crate::player::{Grounded, Player, PlayerVelocity};
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "FPS Character Controller".into(),
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins(PlayerControllerPlugin)
+        .init_resource::<JumpTracker>()
+        .add_systems(Startup, (setup, spawn_hud))
+        .add_systems(Update, (update_screen_labels, update_hud))
+        .run();
+}
 
-/// Plugin that creates a test level for the character controller
-pub struct WorldPlugin;
-
-impl Plugin for WorldPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<JumpTracker>();
-        app.add_systems(Startup, (spawn_gymnasium, spawn_hud));
-        app.add_systems(Update, (update_screen_labels, update_hud));
-    }
+fn setup(
+    mut commands: Commands,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<StandardMaterial>>,
+    images: ResMut<Assets<Image>>,
+) {
+    spawn_player(&mut commands, PlayerConfig::default(), Vec3::new(0.0, 2.0, 0.0));
+    spawn_gymnasium(commands, meshes, materials, images);
 }
 
 // ── HUD ─────────────────────────────────────────────────────────────

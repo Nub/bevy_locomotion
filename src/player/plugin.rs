@@ -20,7 +20,9 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(EnhancedInputPlugin);
+        if !app.is_plugin_added::<EnhancedInputPlugin>() {
+            app.add_plugins(EnhancedInputPlugin);
+        }
 
         // Register input context for player
         app.add_input_context::<Player>();
@@ -35,9 +37,6 @@ impl Plugin for PlayerPlugin {
         app.add_observer(handle_crouch_end);
         app.add_observer(handle_jump_start);
         app.add_observer(handle_jump_end);
-
-        // Spawn player on startup
-        app.add_systems(Startup, spawn_player);
 
         // Fixed update systems for physics
         app.add_systems(
@@ -65,14 +64,12 @@ impl Plugin for PlayerPlugin {
 }
 
 /// Spawns the player entity with all required components
-fn spawn_player(mut commands: Commands) {
-    let config = PlayerConfig::default();
-
+pub fn spawn_player(commands: &mut Commands, config: PlayerConfig, position: Vec3) {
     // Spawn yaw entity (rotates on Y axis for left/right look)
     let yaw_entity = commands
         .spawn((
             CameraYaw,
-            Transform::from_translation(Vec3::new(0.0, 2.0, 0.0)),
+            Transform::from_translation(position),
             Visibility::default(),
         ))
         .id();
@@ -142,7 +139,7 @@ fn spawn_player(mut commands: Commands) {
         ))
         .insert((
             // Transform
-            Transform::from_translation(Vec3::new(0.0, 2.0, 0.0)),
+            Transform::from_translation(position),
             Visibility::default(),
         ))
         .insert(
