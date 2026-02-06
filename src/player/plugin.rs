@@ -2,6 +2,7 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::*;
 
+use super::audio::*;
 use super::crouch::*;
 use super::input::{
     clear_look_input, handle_crouch_end, handle_crouch_start, handle_jump_end, handle_jump_start,
@@ -13,8 +14,8 @@ use super::jump::*;
 use super::ledge::*;
 use super::movement::*;
 use super::state::*;
+use super::stepup::*;
 use crate::camera::{CameraConfig, CameraPitch, CameraYaw, FpsCamera, PitchAngle};
-use crate::physics::GameLayer;
 
 /// Plugin for first-person player controller
 pub struct PlayerPlugin;
@@ -27,6 +28,10 @@ impl Plugin for PlayerPlugin {
 
         // Register input context for player
         app.add_input_context::<Player>();
+
+        // Audio messages
+        app.add_message::<PlayerAudioMessage>();
+        app.init_resource::<AudioTracker>();
 
         // Input observers
         app.add_observer(handle_move_input);
@@ -53,11 +58,13 @@ impl Plugin for PlayerPlugin {
                 handle_jump,
                 variable_jump_height,
                 ground_movement,
+                apply_step_up,
                 air_movement,
                 apply_slide,
                 apply_gravity,
                 apply_velocity,
                 update_collider_height,
+                emit_player_audio_messages,
             )
                 .chain(),
         );
@@ -134,7 +141,7 @@ pub fn spawn_player(commands: &mut Commands, config: PlayerConfig, position: Vec
             // Physics - Dynamic body with locked rotation, let Avian handle collisions
             RigidBody::Dynamic,
             Collider::capsule(config.radius, capsule_height),
-            CollisionLayers::new(GameLayer::Player, [GameLayer::World, GameLayer::Trigger]),
+            CollisionLayers::new(config.player_layer, config.collision_mask),
             LockedAxes::ROTATION_LOCKED,
             LinearVelocity::default(),
             TranslationInterpolation,

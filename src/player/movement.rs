@@ -4,7 +4,6 @@ use bevy::prelude::*;
 use super::input::MoveInput;
 use super::state::*;
 use crate::camera::CameraYaw;
-use crate::physics::GameLayer;
 
 /// Updates grounded state via raycast
 pub fn update_grounded_state(
@@ -30,7 +29,7 @@ pub fn update_grounded_state(
         let ground_check_dist = config.stand_height / 2.0 + 0.1;
 
         let filter = SpatialQueryFilter::default()
-            .with_mask(GameLayer::World);
+            .with_mask(config.world_layer);
 
         let hit = spatial_query.cast_ray(
             ray_origin,

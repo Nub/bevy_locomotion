@@ -5,7 +5,6 @@ use rand::prelude::*;
 use super::input::{CrouchInput, JumpPressed, MoveInput};
 use super::state::*;
 use crate::camera::{CameraPitch, CameraYaw, LedgeClimbBob, LedgeGrabBounce, LedgeShuffleBob};
-use crate::physics::GameLayer;
 
 /// Detects ledge grabs using a three-ray approach.
 ///
@@ -31,9 +30,9 @@ pub fn detect_ledge_grab(
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
-    let filter = SpatialQueryFilter::default().with_mask(GameLayer::World);
 
     for (entity, transform, config, velocity, mut cooldown, mut jump_pressed) in &mut query {
+        let filter = SpatialQueryFilter::default().with_mask(config.world_layer);
         cooldown.timer += dt;
         if cooldown.timer < config.ledge_cooldown {
             continue;
@@ -271,7 +270,7 @@ pub fn apply_ledge_grab(
                     // Verify ledge still exists at the new position
                     let new_point = ledge.surface_point + shuffle_delta;
                     let ray_origin = Vec3::new(new_point.x, ledge.surface_point.y + 0.3, new_point.z);
-                    let filter = SpatialQueryFilter::default().with_mask(GameLayer::World);
+                    let filter = SpatialQueryFilter::default().with_mask(config.world_layer);
                     let ray_hit = spatial_query.cast_ray(
                         ray_origin,
                         Dir3::NEG_Y,

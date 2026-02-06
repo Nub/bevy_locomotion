@@ -15,6 +15,7 @@ path = "examples/gymnasium.rs"
 
 [features]
 dev = ["bevy/dynamic_linking"]
+gym-audio = []
 
 # Optimize dependencies in dev for faster iteration
 [profile.dev.package."*"]

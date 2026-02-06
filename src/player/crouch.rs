@@ -3,7 +3,6 @@ use bevy::prelude::*;
 
 use super::input::CrouchInput;
 use super::state::*;
-use crate::physics::GameLayer;
 
 /// Updates crouch state and handles slide initiation
 pub fn update_crouch_state(
@@ -137,7 +136,7 @@ fn can_stand_up(spatial_query: &SpatialQuery, position: Vec3, config: &PlayerCon
     let height_diff = config.stand_height - config.crouch_height;
     let check_shape = Collider::capsule(config.radius * 0.9, height_diff);
 
-    let filter = SpatialQueryFilter::default().with_mask(GameLayer::World);
+    let filter = SpatialQueryFilter::default().with_mask(config.world_layer);
 
     // Check space above the crouched player
     let check_pos = position + Vec3::Y * (config.crouch_height / 2.0 + height_diff / 2.0);

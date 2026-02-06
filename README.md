@@ -1,28 +1,22 @@
 # player_controller
 
-A first-person character controller for [Bevy](https://bevyengine.org/) with physics powered by [Avian3D](https://github.com/Jondolf/avian).
-
-## Features
-
-- Ground movement with acceleration/friction model
-- Sprinting, crouching, and sliding
-- Variable-height jumping with coyote time and jump buffering
-- FPS camera with head bob, FOV effects, and view punch on landing
-- Cursor grab/release (Escape to release, click to recapture)
+A first-person character controller for Bevy 0.18 and Avian3d. Provides a
+complete movement system with walking, sprinting, crouching, sliding,
+jumping, ledge grabbing, and step-up — all driven by physics raycasts.
 
 ## Quick Start
 
-Add the dependency to your `Cargo.toml`:
+Add the dependency:
 
 ```toml
 [dependencies]
 player_controller = { path = "../player_controller" }
-bevy = "0.18"
 ```
 
-Then in your app:
+Minimal example:
 
 ```rust
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use player_controller::prelude::*;
 
@@ -34,69 +28,205 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands) {
-    // Spawn player at a position
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    // Player
     spawn_player(&mut commands, PlayerConfig::default(), Vec3::new(0.0, 2.0, 0.0));
 
-    // Add your world geometry, lighting, etc.
+    // Ground
+    commands.spawn((
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0))),
+        MeshMaterial3d(materials.add(Color::srgb(0.3, 0.5, 0.3))),
+        RigidBody::Static,
+        Collider::half_space(Vec3::Y),
+        CollisionLayers::new(GameLayer::World, [GameLayer::Player]),
+    ));
+
+    // Light
+    commands.spawn((
+        DirectionalLight { shadows_enabled: true, ..default() },
+        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.7, 0.5, 0.0)),
+    ));
 }
 ```
 
-`PlayerControllerPlugin` bundles physics (Avian3D), player input/movement, and camera systems. You can also add the sub-plugins individually:
+`PlayerControllerPlugin` bundles physics (Avian3d), player systems, and
+camera management. Call `spawn_player` to create the player entity with all
+required components, a camera hierarchy, and default WASD+mouse input
+bindings.
+
+## Controls
+
+| Action  | Key                        |
+|---------|----------------------------|
+| Move    | W / A / S / D              |
+| Look    | Mouse                      |
+| Jump    | Space                      |
+| Sprint  | Left Shift                 |
+| Crouch  | Left Ctrl                  |
+
+Sprint + Crouch initiates a **slide**. Jump during a slide for a momentum
+boost. While airborne, press Jump near a wall to **ledge grab**, then Jump
+again to climb or look away and Jump to wall-jump. Small obstacles are
+**auto-stepped** when walking into them.
+
+## Configuration
+
+All movement parameters live in `PlayerConfig`. Override any field:
 
 ```rust
-app.add_plugins((PhysicsPlugin, PlayerPlugin, CameraPlugin));
+spawn_player(
+    &mut commands,
+    PlayerConfig {
+        walk_speed: 6.0,
+        sprint_speed: 10.0,
+        jump_velocity: 9.0,
+        step_up_height: 0.4,
+        ..default()
+    },
+    Vec3::new(0.0, 2.0, 0.0),
+);
 ```
 
-## Configuring the Player
+| Field | Default | Description |
+|---|---|---|
+| `walk_speed` | `5.0` | Walking speed (m/s) |
+| `sprint_speed` | `8.0` | Sprinting speed (m/s) |
+| `crouch_speed` | `2.5` | Crouching speed (m/s) |
+| `ground_accel` | `50.0` | Ground acceleration |
+| `ground_friction` | `40.0` | Ground deceleration |
+| `air_accel` | `15.0` | Air control acceleration |
+| `jump_velocity` | `8.0` | Jump impulse (m/s) |
+| `jump_cut_multiplier` | `0.5` | Variable jump height cut (0.0-1.0) |
+| `coyote_time` | `0.15` | Coyote time window (s) |
+| `jump_buffer` | `0.1` | Jump buffer window (s) |
+| `stand_height` | `1.8` | Standing capsule height (m) |
+| `crouch_height` | `1.0` | Crouching capsule height (m) |
+| `radius` | `0.4` | Capsule radius (m) |
+| `min_slide_speed` | `6.0` | Minimum speed to start a slide (m/s) |
+| `slide_duration` | `0.8` | Slide duration (s) |
+| `slide_friction` | `2.0` | Slide friction curve exponent |
+| `slide_boost` | `1.2` | Slide initiation speed multiplier |
+| `sprint_slide_grace` | `0.15` | Grace period after releasing sprint for slides (s) |
+| `slide_jump_boost` | `3.0` | Forward boost when jumping out of a slide (m/s) |
+| `slide_jump_grace` | `0.2` | Grace period after slide for slide-jump boost (s) |
+| `max_horizontal_speed` | `20.0` | Speed cap (m/s), 0 = uncapped |
+| `ledge_detect_reach` | `0.6` | Ledge probe distance past capsule (m) |
+| `ledge_climb_duration` | `1.05` | Climb animation duration (s) |
+| `ledge_shuffle_speed` | `1.75` | Sideways shuffle speed on ledge (m/s) |
+| `ledge_cooldown` | `0.4` | Cooldown before re-grabbing a ledge (s) |
+| `ledge_grab_max_fall_speed` | `10.0` | Max fall speed for ledge grab (m/s), 0 = uncapped |
+| `ledge_grab_ascending` | `false` | Allow ledge grab while moving upward |
+| `step_up_height` | `0.35` | Max auto-step obstacle height (m) |
+| `player_layer` | `GameLayer::Player` | Physics layer for the player body |
+| `world_layer` | `GameLayer::World` | Layer mask for spatial queries (ground, ledge, step-up, crouch) |
+| `collision_mask` | `World + Trigger` | Layer mask the player rigid body collides with |
 
-`PlayerConfig` exposes all movement tuning parameters:
+## Custom Collision Layers
 
-```rust
-let config = PlayerConfig {
-    walk_speed: 5.0,
-    sprint_speed: 8.0,
-    crouch_speed: 2.5,
-    jump_velocity: 8.0,
-    // ... see PlayerConfig fields for the full list
-    ..default()
-};
-spawn_player(&mut commands, config, Vec3::new(0.0, 2.0, 0.0));
-```
-
-## Collision Layers
-
-World geometry should use `GameLayer::World` to collide with the player:
+By default the controller uses `GameLayer` for physics queries. To use your
+own layer enum, set `player_layer`, `world_layer`, and `collision_mask` on
+`PlayerConfig`:
 
 ```rust
 use avian3d::prelude::*;
-use player_controller::prelude::*;
 
-commands.spawn((
-    RigidBody::Static,
-    Collider::cuboid(10.0, 1.0, 10.0),
-    CollisionLayers::new(GameLayer::World, [GameLayer::Player]),
-    // mesh, material, transform...
-));
+#[derive(PhysicsLayer, Default)]
+enum MyLayer {
+    #[default]
+    Default,
+    Player,
+    Environment,
+    Trigger,
+}
+
+spawn_player(
+    &mut commands,
+    PlayerConfig {
+        player_layer: MyLayer::Player.into(),
+        world_layer: MyLayer::Environment.into(),
+        collision_mask: LayerMask::from([MyLayer::Environment, MyLayer::Trigger]),
+        ..default()
+    },
+    Vec3::new(0.0, 2.0, 0.0),
+);
+```
+
+World geometry should collide with the player layer you choose:
+
+```rust
+CollisionLayers::new(MyLayer::Environment, [MyLayer::Player])
 ```
 
 ## Querying Player State
 
-The player entity has marker components you can query:
+The player's current state is expressed as marker components. Query them in
+your own systems:
 
 ```rust
-fn my_system(query: Query<(&PlayerVelocity, &Transform, Has<Grounded>, Has<Sprinting>), With<Player>>) {
-    let Ok((velocity, transform, grounded, sprinting)) = query.single() else { return };
+fn my_system(
+    query: Query<(
+        &PlayerVelocity,
+        &Transform,
+        Has<Grounded>,
+        Has<Sprinting>,
+        Has<Crouching>,
+        Has<Sliding>,
+        Has<LedgeGrabbing>,
+        Has<LedgeClimbing>,
+    ), With<Player>>,
+) {
+    let Ok((velocity, transform, grounded, ..)) = query.single() else { return };
     // ...
 }
 ```
 
-Available state markers: `Player`, `Grounded`, `Sprinting`, `Crouching`, `Sliding`.
+## Audio Events
 
-## Running the Example
+The controller emits `PlayerAudioMessage` messages for gameplay events.
+Subscribe with a `MessageReader` to play sounds, spawn particles, or
+trigger any other feedback:
+
+```rust
+fn play_sounds(mut reader: MessageReader<PlayerAudioMessage>) {
+    for msg in reader.read() {
+        match msg {
+            PlayerAudioMessage::Footstep { speed } => { /* play footstep */ }
+            PlayerAudioMessage::Landed { impact_speed } => { /* thud */ }
+            PlayerAudioMessage::Jumped => { /* whoosh */ }
+            PlayerAudioMessage::SlideStart => { /* screech */ }
+            PlayerAudioMessage::SlideEnd => { /* fade */ }
+            PlayerAudioMessage::LedgeGrabbed => { /* clunk */ }
+            PlayerAudioMessage::LedgeClimbStarted => { /* effort */ }
+            PlayerAudioMessage::LedgeClimbFinished => { /* done */ }
+            PlayerAudioMessage::WallJumped => { /* kick */ }
+            PlayerAudioMessage::SteppedUp => { /* tap */ }
+        }
+    }
+}
+```
+
+## Collision Layers
+
+World geometry must be on `GameLayer::World` to interact with the player:
+
+```rust
+CollisionLayers::new(GameLayer::World, [GameLayer::Player])
+```
+
+The player is spawned on `GameLayer::Player` and collides with `World` and
+`Trigger` layers.
+
+## Gymnasium Example
+
+A test environment with slopes, jump gaps, obstacles, crouch tunnels, ledge
+walls, and slide ramps:
 
 ```sh
 cargo run --example gymnasium
 ```
 
-The gymnasium example includes slopes, jump gaps, obstacles, crouch tunnels, height jumps, and slide ramps for testing the controller.
+Enable placeholder audio with `--features gym-audio`.

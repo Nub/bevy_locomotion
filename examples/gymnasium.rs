@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use player_controller::prelude::*;
 
 fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "FPS Character Controller".into(),
                 ..default()
@@ -13,8 +13,13 @@ fn main() {
         }))
         .add_plugins(PlayerControllerPlugin)
         .init_resource::<JumpTracker>()
-        .add_systems(Startup, (setup, spawn_hud))
-        .add_systems(Update, (update_screen_labels, update_hud))
+        .add_systems(Startup, (setup, spawn_hud));
+
+    #[cfg(feature = "gym-audio")]
+    app.add_systems(Startup, gym_audio::load_audio)
+        .add_systems(Update, gym_audio::play_audio);
+
+    app.add_systems(Update, (update_screen_labels, update_hud))
         .run();
 }
 
@@ -152,6 +157,83 @@ fn spawn_label(commands: &mut Commands, text: &str, world_pos: Vec3) {
         },
         ScreenLabel { world_pos },
     ));
+}
+
+// ── Audio ───────────────────────────────────────────────────────────
+
+#[cfg(feature = "gym-audio")]
+mod gym_audio {
+    use bevy::prelude::*;
+    use player_controller::prelude::*;
+
+    #[derive(Resource)]
+    pub struct AudioHandles {
+        footstep: Handle<AudioSource>,
+        land: Handle<AudioSource>,
+        jump: Handle<AudioSource>,
+        slide_start: Handle<AudioSource>,
+        slide_end: Handle<AudioSource>,
+        ledge_grab: Handle<AudioSource>,
+        ledge_climb_start: Handle<AudioSource>,
+        ledge_climb_finish: Handle<AudioSource>,
+        wall_jump: Handle<AudioSource>,
+        step_up: Handle<AudioSource>,
+    }
+
+    pub fn load_audio(mut commands: Commands, asset_server: Res<AssetServer>) {
+        commands.insert_resource(AudioHandles {
+            footstep: asset_server.load("audio/footstep.ogg"),
+            land: asset_server.load("audio/land.ogg"),
+            jump: asset_server.load("audio/jump.ogg"),
+            slide_start: asset_server.load("audio/slide_start.ogg"),
+            slide_end: asset_server.load("audio/slide_end.ogg"),
+            ledge_grab: asset_server.load("audio/ledge_grab.ogg"),
+            ledge_climb_start: asset_server.load("audio/ledge_climb_start.ogg"),
+            ledge_climb_finish: asset_server.load("audio/ledge_climb_finish.ogg"),
+            wall_jump: asset_server.load("audio/wall_jump.ogg"),
+            step_up: asset_server.load("audio/step_up.ogg"),
+        });
+    }
+
+    pub fn play_audio(
+        mut commands: Commands,
+        mut reader: MessageReader<PlayerAudioMessage>,
+        handles: Option<Res<AudioHandles>>,
+    ) {
+        let Some(handles) = handles else { return };
+
+        for msg in reader.read() {
+            let (handle, volume) = match msg {
+                PlayerAudioMessage::Footstep { speed } => {
+                    let vol = (speed / 8.0).clamp(0.3, 1.0);
+                    (handles.footstep.clone(), vol)
+                }
+                PlayerAudioMessage::Landed { impact_speed } => {
+                    let vol = (impact_speed / 15.0).clamp(0.4, 1.0);
+                    (handles.land.clone(), vol)
+                }
+                PlayerAudioMessage::Jumped => (handles.jump.clone(), 0.6),
+                PlayerAudioMessage::SlideStart => (handles.slide_start.clone(), 0.7),
+                PlayerAudioMessage::SlideEnd => (handles.slide_end.clone(), 0.5),
+                PlayerAudioMessage::LedgeGrabbed => (handles.ledge_grab.clone(), 0.7),
+                PlayerAudioMessage::LedgeClimbStarted => (handles.ledge_climb_start.clone(), 0.6),
+                PlayerAudioMessage::LedgeClimbFinished => (handles.ledge_climb_finish.clone(), 0.7),
+                PlayerAudioMessage::WallJumped => (handles.wall_jump.clone(), 0.7),
+                PlayerAudioMessage::SteppedUp => (handles.step_up.clone(), 0.4),
+            };
+
+            commands.spawn((
+                AudioPlayer::new(handle),
+                PlaybackSettings {
+                    mode: bevy::audio::PlaybackMode::Despawn,
+                    volume: bevy::audio::Volume::Linear(volume),
+                    ..default()
+                },
+            ));
+
+            info!("{msg:?}");
+        }
+    }
 }
 
 // ── Checker texture ──────────────────────────────────────────────────

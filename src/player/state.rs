@@ -1,4 +1,7 @@
+use avian3d::prelude::*;
 use bevy::prelude::*;
+
+use crate::physics::GameLayer;
 
 /// Marker component for the player entity (also used as input context)
 #[derive(Component, Default)]
@@ -63,6 +66,14 @@ pub struct PlayerConfig {
     pub ledge_grab_max_fall_speed: f32,
     /// Whether ledge grab triggers while the player is moving upward
     pub ledge_grab_ascending: bool,
+    /// Maximum height of obstacles the player can auto-step over (m)
+    pub step_up_height: f32,
+    /// Physics layer the player body belongs to
+    pub player_layer: LayerMask,
+    /// Physics layer mask used for world queries (ground, ledge, step-up, crouch)
+    pub world_layer: LayerMask,
+    /// Physics layer mask the player rigid body collides with
+    pub collision_mask: LayerMask,
 }
 
 impl Default for PlayerConfig {
@@ -96,6 +107,10 @@ impl Default for PlayerConfig {
             ledge_cooldown: 0.4,
             ledge_grab_max_fall_speed: 10.0,
             ledge_grab_ascending: false,
+            step_up_height: 0.35,
+            player_layer: GameLayer::Player.into(),
+            world_layer: GameLayer::World.into(),
+            collision_mask: LayerMask::from([GameLayer::World, GameLayer::Trigger]),
         }
     }
 }

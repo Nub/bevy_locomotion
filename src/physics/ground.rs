@@ -1,8 +1,6 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 
-use super::GameLayer;
-
 /// Maximum angle (in radians) that can be walked on
 pub const MAX_SLOPE_ANGLE: f32 = 0.785; // ~45 degrees
 
@@ -23,6 +21,7 @@ pub fn detect_ground(
     position: Vec3,
     collider_radius: f32,
     collider_height: f32,
+    world_layer: LayerMask,
 ) -> Option<GroundHit> {
     // Use a smaller sphere for ground detection to avoid false positives on walls
     let cast_radius = collider_radius * 0.5;
@@ -36,7 +35,7 @@ pub fn detect_ground(
     // Cast distance: from bottom of capsule down a small amount
     let max_distance = cast_radius + GROUND_CAST_DISTANCE;
 
-    let filter = SpatialQueryFilter::default().with_mask(GameLayer::World);
+    let filter = SpatialQueryFilter::default().with_mask(world_layer);
 
     let config = ShapeCastConfig {
         max_distance,
@@ -73,6 +72,7 @@ pub fn is_on_ground(
     position: Vec3,
     collider_radius: f32,
     collider_height: f32,
+    world_layer: LayerMask,
 ) -> bool {
-    detect_ground(spatial_query, position, collider_radius, collider_height).is_some()
+    detect_ground(spatial_query, position, collider_radius, collider_height, world_layer).is_some()
 }
