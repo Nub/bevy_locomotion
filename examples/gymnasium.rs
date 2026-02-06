@@ -1,5 +1,5 @@
 use avian3d::prelude::*;
-use bevy::prelude::*;
+use bevy::{prelude::*, window::{CursorGrabMode, CursorOptions, PrimaryWindow}};
 use bevy_locomotion::prelude::*;
 
 fn main() {
@@ -13,7 +13,8 @@ fn main() {
         }))
         .add_plugins(BevyLocomotionPlugin)
         .init_resource::<JumpTracker>()
-        .add_systems(Startup, (setup, spawn_hud));
+        .add_systems(Startup, (setup, spawn_hud, setup_cursor_grab))
+        .add_systems(Update, toggle_cursor_grab);
 
     #[cfg(feature = "gym-audio")]
     app.add_systems(Startup, gym_audio::load_audio)
@@ -744,4 +745,31 @@ fn spawn_ramp(
         Collider::cuboid(size.x, size.y, size.z),
         CollisionLayers::new(GameLayer::World, [GameLayer::Player]),
     ));
+}
+
+// ── Cursor grab ──────────────────────────────────────────────────────
+
+fn setup_cursor_grab(mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>) {
+    if let Ok(mut cursor) = cursor_query.single_mut() {
+        cursor.grab_mode = CursorGrabMode::Locked;
+        cursor.visible = false;
+    }
+}
+
+fn toggle_cursor_grab(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>,
+) {
+    let Ok(mut cursor) = cursor_query.single_mut() else {
+        return;
+    };
+
+    if keyboard.just_pressed(KeyCode::Escape) {
+        cursor.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
+    } else if mouse.just_pressed(MouseButton::Left) && cursor.grab_mode == CursorGrabMode::None {
+        cursor.grab_mode = CursorGrabMode::Locked;
+        cursor.visible = false;
+    }
 }

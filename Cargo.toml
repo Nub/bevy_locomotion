@@ -1,6 +1,6 @@
 [package]
 name = "bevy_locomotion"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 description = "A first-person character controller for Bevy and Avian3d"
 license = "MIT OR Apache-2.0"

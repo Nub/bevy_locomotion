@@ -1,4 +1,4 @@
-use bevy::{prelude::*, window::{CursorGrabMode, CursorOptions, PrimaryWindow}};
+use bevy::prelude::*;
 
 use super::{effects::*, look::*, smoothing::*};
 
@@ -8,8 +8,6 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PreviousGroundedState>();
-
-        app.add_systems(Startup, setup_cursor_grab);
 
         app.add_systems(
             Update,
@@ -28,33 +26,5 @@ impl Plugin for CameraPlugin {
                 .chain(),
         );
 
-        app.add_systems(Update, toggle_cursor_grab);
-    }
-}
-
-/// Grabs and hides the cursor for FPS controls
-fn setup_cursor_grab(mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>) {
-    if let Ok(mut cursor) = cursor_query.single_mut() {
-        cursor.grab_mode = CursorGrabMode::Locked;
-        cursor.visible = false;
-    }
-}
-
-/// Escape releases cursor, mouse click recaptures
-fn toggle_cursor_grab(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    mut cursor_query: Query<&mut CursorOptions, With<PrimaryWindow>>,
-) {
-    let Ok(mut cursor) = cursor_query.single_mut() else {
-        return;
-    };
-
-    if keyboard.just_pressed(KeyCode::Escape) {
-        cursor.grab_mode = CursorGrabMode::None;
-        cursor.visible = true;
-    } else if mouse.just_pressed(MouseButton::Left) && cursor.grab_mode == CursorGrabMode::None {
-        cursor.grab_mode = CursorGrabMode::Locked;
-        cursor.visible = false;
     }
 }
