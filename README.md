@@ -1,8 +1,22 @@
 # bevy_locomotion
 
-A first-person character controller for Bevy 0.18 and Avian3d. Provides a
-complete movement system with walking, sprinting, crouching, sliding,
-jumping, ledge grabbing, and step-up — all driven by physics raycasts.
+A first-person character controller for Bevy 0.18 and Avian3d. All
+movement is driven by physics raycasts via Avian3d spatial queries.
+
+- **Walk and sprint** with acceleration/friction ground movement model
+- **Jump** with variable height (release early for short hops), coyote time, and jump buffering
+- **Crouch** with collider resizing and stand-up obstruction checks
+- **Slide** by sprinting into crouch — momentum-based with a friction curve and configurable boost
+- **Slide jump** for a forward momentum boost when jumping out of a slide
+- **Ledge grab** by pressing jump near a wall edge while airborne
+- **Ledge climb** with a two-phase animated mantle (up then forward)
+- **Ledge shuffle** by strafing while hanging, with head bob
+- **Wall jump** by looking away from the wall and jumping while grabbing a ledge
+- **Auto step-up** over small obstacles like stairs and curbs
+- **Slope handling** with velocity projection to maintain speed on inclines
+- **Air control** with reduced acceleration while airborne
+- **Audio events** emitted as messages for footsteps, jumps, landings, slides, ledge grabs, and more
+- **Configurable collision layers** — bring your own `PhysicsLayer` enum or use the built-in `GameLayer`
 
 ## Quick Start
 
