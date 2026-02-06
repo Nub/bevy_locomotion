@@ -66,13 +66,6 @@ pub fn update_grounded_state(
             }
             coyote.timer += dt;
             air_time.duration += dt;
-
-            // If vertical velocity is near zero while airborne, the player is
-            // likely resting on an edge the center ray missed — keep coyote
-            // alive so they can still jump and move.
-            if player_vel.y.abs() < 0.5 {
-                coyote.timer = 0.0;
-            }
         }
     }
 }
