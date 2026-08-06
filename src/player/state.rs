@@ -78,6 +78,9 @@ pub struct PlayerConfig {
     pub max_slope_angle: f32,
     /// Maximum height of obstacles the player can auto-step over (m)
     pub step_up_height: f32,
+    /// How far the player is pulled back down to keep contact with descending ground (m).
+    /// Prevents launching off the lip where flat ground meets a slope. 0.0 = disabled.
+    pub ground_snap_distance: f32,
     /// Physics layer the player body belongs to
     pub player_layer: LayerMask,
     /// Physics layer mask used for world queries (ground, ledge, step-up, crouch)
@@ -120,6 +123,7 @@ impl Default for PlayerConfig {
             ladder_climb_speed: 4.0,
             max_slope_angle: 39.0,
             step_up_height: 0.35,
+            ground_snap_distance: 0.3,
             player_layer: GameLayer::Player.into(),
             world_layer: GameLayer::World.into(),
             collision_mask: LayerMask::from([GameLayer::World, GameLayer::Trigger]),

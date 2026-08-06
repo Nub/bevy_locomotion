@@ -5,6 +5,10 @@ use super::input::MoveInput;
 use super::state::*;
 use crate::camera::CameraYaw;
 
+/// Gap kept between the collider and the ground when snapping down.
+/// Matches `MoveAndSlideConfig::skin_width`'s default.
+const GROUND_SKIN_WIDTH: f32 = 0.01;
+
 /// Updates grounded state via raycast
 pub fn update_grounded_state(
     mut commands: Commands,
@@ -178,7 +182,79 @@ pub fn apply_gravity(
     }
 }
 
-/// Performs move-and-slide, projecting onto ground surface when grounded
+/// Rotates `velocity` into the plane defined by `normal`, keeping its horizontal speed.
+///
+/// The movement systems produce a world-horizontal velocity. On a slope that vector
+/// points into the surface going uphill and off it going downhill, so it has to be
+/// tilted into the surface before it is used to move the character. Rescaling to the
+/// original horizontal speed keeps walk speed constant regardless of incline, rather
+/// than losing the component that got redirected vertically.
+fn project_onto_plane(velocity: Vec3, normal: Vec3) -> Vec3 {
+    let horizontal = Vec3::new(velocity.x, 0.0, velocity.z);
+    let horizontal_speed = horizontal.length();
+
+    if horizontal_speed < 0.01 {
+        return velocity;
+    }
+
+    let projected = horizontal - normal * horizontal.dot(normal);
+    let projected_horizontal = Vec2::new(projected.x, projected.z).length();
+
+    if projected_horizontal < 0.001 {
+        return velocity;
+    }
+
+    let mut result = projected * (horizontal_speed / projected_horizontal);
+    // Preserve any residual fall speed so the character is never pushed upward.
+    result.y += velocity.y.min(0.0);
+    result
+}
+
+/// Casts the collider straight down and returns the position that puts the character
+/// back in contact with walkable ground, if any is within `ground_snap_distance`.
+///
+/// Velocity projection alone cannot cover convex breaks — the lip where flat ground
+/// meets a descending slope, or where a slope steepens — because the projection uses
+/// the normal of the surface the character was standing on, which is still the old,
+/// shallower one. Without this the character launches off every such edge.
+fn snap_to_ground(
+    spatial_query: &SpatialQuery,
+    transform: &Transform,
+    collider: &Collider,
+    config: &PlayerConfig,
+) -> Option<Vec3> {
+    if config.ground_snap_distance <= 0.0 {
+        return None;
+    }
+
+    let filter = SpatialQueryFilter::default().with_mask(config.world_layer);
+
+    let hit = spatial_query.cast_shape(
+        collider,
+        transform.translation,
+        transform.rotation,
+        Dir3::NEG_Y,
+        &ShapeCastConfig::from_max_distance(config.ground_snap_distance),
+        &filter,
+    )?;
+
+    // Never snap onto walls or slopes too steep to stand on.
+    let min_ground_normal_y = config.max_slope_angle.to_radians().cos();
+    if hit.normal1.dot(Vec3::Y) < min_ground_normal_y {
+        return None;
+    }
+
+    // Leave the same gap move-and-slide maintains, so the snap does not create a
+    // penetration that depenetration has to undo on the next tick.
+    let drop = hit.distance - GROUND_SKIN_WIDTH;
+    if drop <= 0.0 {
+        return None;
+    }
+
+    Some(transform.translation - Vec3::Y * drop)
+}
+
+/// Performs move-and-slide, following the ground surface when grounded
 pub fn apply_velocity(
     mut query: Query<
         (
@@ -192,17 +268,18 @@ pub fn apply_velocity(
         With<Player>,
     >,
     move_and_slide: MoveAndSlide,
+    spatial_query: SpatialQuery,
     time: Res<Time>,
 ) {
     for (
-        entity, 
-        grounded, 
-        ground_normal, 
-        config, 
-        mut transform, 
-        mut lin_vel, 
+        entity,
+        grounded,
+        ground_normal,
+        config,
+        mut transform,
+        mut lin_vel,
         collider
-    ) in &mut query 
+    ) in &mut query
     {
         // Clamp horizontal speed
         if config.max_horizontal_speed > 0.0 {
@@ -214,48 +291,32 @@ pub fn apply_velocity(
             }
         }
 
+        // Only follow the ground while standing on it and not moving upward — a jump
+        // must be free to leave the surface.
+        let follow_ground = grounded.is_some() && lin_vel.y <= 0.0;
+
+        let mut move_velocity = lin_vel.0;
+        if follow_ground && let Some(GroundNormal(normal)) = ground_normal {
+            move_velocity = project_onto_plane(move_velocity, *normal);
+        }
+
         let MoveAndSlideOutput {
             position: new_position,
-            projected_velocity,
+            ..
         } = move_and_slide.move_and_slide(
             collider,
             transform.translation.adjust_precision(),
             transform.rotation.adjust_precision(),
-            lin_vel.0,
+            move_velocity,
             time.delta(),
             &MoveAndSlideConfig::default(),
             &SpatialQueryFilter::from_excluded_entities([entity]),
             |hit| {
-                if grounded.is_none() {
-                    // Early out if we don't have ground detection.
-                    return MoveAndSlideHitResponse::Accept;
-                }
-
-                // If we hit a slope, project the velocity onto the slope surface to maintain speed.
-                if let Some(GroundNormal(normal)) = ground_normal 
-                {
+                // While grounded, slide along whatever we hit at full speed instead of
+                // bleeding it off into the contact normal.
+                if grounded.is_some() {
                     let normal = hit.normal.adjust_precision();
-                    let horizontal = Vec3::new(lin_vel.x, 0.0, lin_vel.z);
-                    let projected = horizontal - normal * horizontal.dot(normal);
-                    let horizontal_speed = horizontal.length();
-
-                    if horizontal_speed > 0.01 {
-                        // Rescale so the horizontal component of projected velocity matches desired speed.
-                        // This preserves full move speed on slopes instead of losing it to collision.
-                        let proj_horiz = Vec2::new(projected.x, projected.z).length();
-                        let scale = if proj_horiz > 0.001 {
-                            horizontal_speed / proj_horiz
-                        } else {
-                            1.0
-                        };
-
-                        // Update the current velocity used by the algorithm.
-                        *hit.velocity = projected * scale;
-                    } else {
-                        lin_vel.x = 0.0;
-                        lin_vel.z = 0.0;
-                        lin_vel.y = lin_vel.y.min(-0.5);
-                    }
+                    *hit.velocity = project_onto_plane(*hit.velocity, normal);
                 }
 
                 // Accept the hit and continue the move-and-slide algorithm with the modified velocity.
@@ -265,6 +326,12 @@ pub fn apply_velocity(
 
         // Update position to the final position calculated by move-and-slide.
         transform.translation = new_position.f32();
+
+        if follow_ground
+            && let Some(snapped) = snap_to_ground(&spatial_query, &transform, collider, config)
+        {
+            transform.translation = snapped;
+        }
     }
 }
 
