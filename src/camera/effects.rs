@@ -1,7 +1,7 @@
 use avian3d::prelude::LinearVelocity;
 use bevy::prelude::*;
 
-use crate::player::{Crouching, Grounded, Player, PlayerConfig, PlayerVelocity};
+use crate::player::{Crouching, Grounded, Player, PlayerConfig};
 
 use super::CameraPitch;
 
@@ -75,7 +75,7 @@ impl Default for FpsCamera {
 
 /// Updates camera FOV based on player speed
 pub fn update_fov(
-    player_query: Query<(&PlayerVelocity, &PlayerConfig), With<Player>>,
+    player_query: Query<(&LinearVelocity, &PlayerConfig), With<Player>>,
     mut camera_query: Query<(&mut Projection, &mut FpsCamera)>,
     time: Res<Time>,
 ) {
@@ -103,7 +103,7 @@ pub fn update_fov(
 
 /// Applies head bob based on movement speed
 pub fn apply_head_bob(
-    player_query: Query<(&PlayerVelocity, Has<Grounded>), With<Player>>,
+    player_query: Query<(&LinearVelocity, Has<Grounded>), With<Player>>,
     mut camera_query: Query<(&mut Transform, &mut FpsCamera), With<FpsCamera>>,
     time: Res<Time>,
 ) {

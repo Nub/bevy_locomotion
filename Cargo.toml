@@ -1,16 +1,16 @@
 [package]
 name = "bevy_locomotion"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
 description = "A first-person character controller for Bevy and Avian3d"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Nub/bevy_locomotion"
 
 [dependencies]
-bevy = "0.18"
+bevy = "0.19"
 rand = "0.8"
-avian3d = "0.5"
-bevy_enhanced_input = "0.23"
+avian3d = "0.7"
+bevy_enhanced_input = "0.26"
 
 [[example]]
 name = "gymnasium"

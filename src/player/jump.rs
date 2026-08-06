@@ -1,3 +1,4 @@
+use avian3d::prelude::*;
 use bevy::prelude::*;
 
 use super::input::{JumpHeld, JumpPressed};
@@ -25,7 +26,7 @@ pub fn handle_jump(
         (
             Entity,
             &PlayerConfig,
-            &mut PlayerVelocity,
+            &mut LinearVelocity,
             &mut JumpBuffer,
             &mut CoyoteTime,
             &mut JumpPressed,
@@ -88,7 +89,7 @@ pub fn handle_jump(
 pub fn variable_jump_height(
     mut commands: Commands,
     mut query: Query<
-        (Entity, &JumpHeld, &PlayerConfig, &mut PlayerVelocity),
+        (Entity, &JumpHeld, &PlayerConfig, &mut LinearVelocity),
         (Without<Grounded>, Without<JumpCut>, Without<LedgeGrabbing>, Without<LedgeClimbing>),
     >,
 ) {

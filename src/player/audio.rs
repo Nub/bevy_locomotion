@@ -1,3 +1,4 @@
+use avian3d::prelude::LinearVelocity;
 use bevy::prelude::*;
 
 use super::state::*;
@@ -43,7 +44,7 @@ pub fn emit_player_audio_messages(
     query: Query<
         (
             &PlayerConfig,
-            &PlayerVelocity,
+            &LinearVelocity,
             Has<Grounded>,
             Has<Sliding>,
             Has<LedgeGrabbing>,

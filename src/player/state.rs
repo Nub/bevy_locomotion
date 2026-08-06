@@ -5,6 +5,12 @@ use crate::physics::GameLayer;
 
 /// Marker component for the player entity (also used as input context)
 #[derive(Component, Default)]
+#[require(
+    RigidBody::Kinematic,
+    CustomPositionIntegration,
+    // We don't want to impart speculative collision impulses in this case
+    SpeculativeMargin(0.0)
+)]
 pub struct Player;
 
 /// Player movement configuration
@@ -120,10 +126,6 @@ impl Default for PlayerConfig {
         }
     }
 }
-
-/// Current player velocity
-#[derive(Component, Default, Deref, DerefMut)]
-pub struct PlayerVelocity(pub Vec3);
 
 /// Marker: player is on the ground
 #[derive(Component)]

@@ -11,7 +11,7 @@ pub fn update_crouch_state(
         Entity,
         &CrouchInput,
         &PlayerConfig,
-        &PlayerVelocity,
+        &LinearVelocity,
         &Transform,
         &SprintGrace,
         Has<Grounded>,
@@ -107,7 +107,7 @@ pub fn update_crouch_state(
 /// Applies slide movement
 pub fn apply_slide(
     mut commands: Commands,
-    mut query: Query<(Entity, &PlayerConfig, &mut PlayerVelocity, &Sliding)>,
+    mut query: Query<(Entity, &PlayerConfig, &mut LinearVelocity, &Sliding)>,
     time: Res<Time>,
 ) {
     let current_time = time.elapsed_secs();

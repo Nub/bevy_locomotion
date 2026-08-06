@@ -53,7 +53,7 @@ fn spawn_hud(mut commands: Commands) {
         HudText,
         Text::new(""),
         TextFont {
-            font_size: 18.0,
+            font_size: FontSize::Px(18.0),
             ..default()
         },
         TextColor(Color::WHITE),
@@ -69,7 +69,7 @@ fn spawn_hud(mut commands: Commands) {
 }
 
 fn update_hud(
-    player_query: Query<(&PlayerVelocity, &Transform, Has<Grounded>), With<Player>>,
+    player_query: Query<(&LinearVelocity, &Transform, Has<Grounded>), With<Player>>,
     mut hud_query: Query<&mut Text, With<HudText>>,
     mut tracker: ResMut<JumpTracker>,
 ) {
@@ -146,7 +146,7 @@ fn spawn_label(commands: &mut Commands, text: &str, world_pos: Vec3) {
     commands.spawn((
         Text::new(text),
         TextFont {
-            font_size: 15.0,
+            font_size: FontSize::Px(15.0),
             ..default()
         },
         TextColor(Color::WHITE),
@@ -696,7 +696,7 @@ fn spawn_gymnasium(
     commands.spawn((
         DirectionalLight {
             illuminance: 14000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.7, 0.5, 0.0)),

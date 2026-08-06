@@ -1,4 +1,4 @@
-use avian3d::prelude::*;
+use avian3d::{math::*, prelude::*};
 use bevy::prelude::*;
 
 use super::input::MoveInput;
@@ -13,7 +13,7 @@ pub fn update_grounded_state(
         Entity,
         &Transform,
         &PlayerConfig,
-        &PlayerVelocity,
+        &LinearVelocity,
         &mut CoyoteTime,
         &mut AirTime,
         Option<&Grounded>,
@@ -76,7 +76,7 @@ pub fn ground_movement(
         (
             &MoveInput,
             &PlayerConfig,
-            &mut PlayerVelocity,
+            &mut LinearVelocity,
             Has<Sprinting>,
             Has<Crouching>,
         ),
@@ -126,7 +126,7 @@ pub fn ground_movement(
 /// Applies air movement with reduced control
 pub fn air_movement(
     mut query: Query<
-        (&MoveInput, &PlayerConfig, &mut PlayerVelocity),
+        (&MoveInput, &PlayerConfig, &mut LinearVelocity),
         (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>, Without<OnLadder>),
     >,
     yaw_query: Query<&Transform, With<CameraYaw>>,
@@ -168,7 +168,7 @@ pub fn air_movement(
 
 /// Applies gravity when not grounded
 pub fn apply_gravity(
-    mut query: Query<&mut PlayerVelocity, (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>, Without<OnLadder>)>,
+    mut query: Query<&mut LinearVelocity, (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>, Without<OnLadder>)>,
     gravity: Res<Gravity>,
     time: Res<Time>,
 ) {
@@ -178,60 +178,93 @@ pub fn apply_gravity(
     }
 }
 
-/// Syncs PlayerVelocity to Avian's LinearVelocity, projecting onto ground surface when grounded
+/// Performs move-and-slide, projecting onto ground surface when grounded
 pub fn apply_velocity(
     mut query: Query<
-        (&mut PlayerVelocity, &PlayerConfig, &mut LinearVelocity, Option<&Grounded>, Option<&GroundNormal>),
+        (
+            Entity,
+            Option<&Grounded>, Option<&GroundNormal>,
+            &PlayerConfig,
+            &mut Transform,
+            &mut LinearVelocity,
+            &Collider,
+        ),
         With<Player>,
     >,
+    move_and_slide: MoveAndSlide,
+    time: Res<Time>,
 ) {
-    for (mut player_vel, config, mut lin_vel, grounded, ground_normal) in &mut query {
+    for (
+        entity, 
+        grounded, 
+        ground_normal, 
+        config, 
+        mut transform, 
+        mut lin_vel, 
+        collider
+    ) in &mut query 
+    {
         // Clamp horizontal speed
         if config.max_horizontal_speed > 0.0 {
-            let h_speed = Vec2::new(player_vel.x, player_vel.z).length();
+            let h_speed = Vec2::new(lin_vel.x, lin_vel.z).length();
             if h_speed > config.max_horizontal_speed {
                 let scale = config.max_horizontal_speed / h_speed;
-                player_vel.x *= scale;
-                player_vel.z *= scale;
+                lin_vel.x *= scale;
+                lin_vel.z *= scale;
             }
         }
 
-        if grounded.is_some() {
-            let horizontal = Vec3::new(player_vel.x, 0.0, player_vel.z);
-
-            if let Some(GroundNormal(normal)) = ground_normal {
-                // Project horizontal velocity onto slope surface to maintain speed on inclines
-                let projected = horizontal - *normal * horizontal.dot(*normal);
-                let horizontal_speed = horizontal.length();
-
-                if horizontal_speed > 0.01 {
-                    // Rescale so the horizontal component of projected velocity matches desired speed.
-                    // This preserves full move speed on slopes instead of losing it to collision.
-                    let proj_horiz = Vec2::new(projected.x, projected.z).length();
-                    let scale = if proj_horiz > 0.001 {
-                        horizontal_speed / proj_horiz
-                    } else {
-                        1.0
-                    };
-                    let slope_vel = projected * scale;
-                    lin_vel.x = slope_vel.x;
-                    lin_vel.y = (player_vel.y + slope_vel.y).min(slope_vel.y);
-                    lin_vel.z = slope_vel.z;
-                } else {
-                    lin_vel.x = 0.0;
-                    lin_vel.z = 0.0;
-                    lin_vel.y = player_vel.y.min(-0.5);
+        let MoveAndSlideOutput {
+            position: new_position,
+            projected_velocity,
+        } = move_and_slide.move_and_slide(
+            collider,
+            transform.translation.adjust_precision(),
+            transform.rotation.adjust_precision(),
+            lin_vel.0,
+            time.delta(),
+            &MoveAndSlideConfig::default(),
+            &SpatialQueryFilter::from_excluded_entities([entity]),
+            |hit| {
+                if grounded.is_none() {
+                    // Early out if we don't have ground detection.
+                    return MoveAndSlideHitResponse::Accept;
                 }
-            } else {
-                lin_vel.x = player_vel.x;
-                lin_vel.z = player_vel.z;
-                lin_vel.y = player_vel.y.min(-0.5);
-            }
-        } else {
-            lin_vel.x = player_vel.x;
-            lin_vel.z = player_vel.z;
-            lin_vel.y = player_vel.y;
-        }
+
+                // If we hit a slope, project the velocity onto the slope surface to maintain speed.
+                if let Some(GroundNormal(normal)) = ground_normal 
+                {
+                    let normal = hit.normal.adjust_precision();
+                    let horizontal = Vec3::new(lin_vel.x, 0.0, lin_vel.z);
+                    let projected = horizontal - normal * horizontal.dot(normal);
+                    let horizontal_speed = horizontal.length();
+
+                    if horizontal_speed > 0.01 {
+                        // Rescale so the horizontal component of projected velocity matches desired speed.
+                        // This preserves full move speed on slopes instead of losing it to collision.
+                        let proj_horiz = Vec2::new(projected.x, projected.z).length();
+                        let scale = if proj_horiz > 0.001 {
+                            horizontal_speed / proj_horiz
+                        } else {
+                            1.0
+                        };
+
+                        // Update the current velocity used by the algorithm.
+                        *hit.velocity = projected * scale;
+                    } else {
+                        lin_vel.x = 0.0;
+                        lin_vel.z = 0.0;
+                        lin_vel.y = lin_vel.y.min(-0.5);
+                    }
+                }
+
+                // Accept the hit and continue the move-and-slide algorithm with the modified velocity.
+                MoveAndSlideHitResponse::Accept
+            },
+        );
+
+        // Update position to the final position calculated by move-and-slide.
+        transform.translation = new_position.f32();
     }
 }
 

@@ -132,7 +132,6 @@ pub fn spawn_player(commands: &mut Commands, config: PlayerConfig, position: Vec
         .spawn((
             Player,
             config,
-            PlayerVelocity::default(),
             CoyoteTime::default(),
             JumpBuffer::default(),
             AirTime::default(),
@@ -150,12 +149,8 @@ pub fn spawn_player(commands: &mut Commands, config: PlayerConfig, position: Vec
             JumpHeld::default(),
         ))
         .insert((
-            // Physics - Dynamic body with locked rotation, let Avian handle collisions
-            RigidBody::Dynamic,
             Collider::capsule(config.radius, capsule_height),
             CollisionLayers::new(config.player_layer, config.collision_mask),
-            LockedAxes::ROTATION_LOCKED,
-            LinearVelocity::default(),
             TranslationInterpolation,
             Friction::new(0.0),  // No friction - we handle movement ourselves
             Restitution::new(0.0),  // No bounce

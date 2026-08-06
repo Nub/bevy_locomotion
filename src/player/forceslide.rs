@@ -70,7 +70,7 @@ pub fn apply_forced_slide(
     mut commands: Commands,
     spatial_query: SpatialQuery,
     mut query: Query<
-        (Entity, &Transform, &PlayerConfig, &mut PlayerVelocity, &ForcedSliding),
+        (Entity, &Transform, &PlayerConfig, &mut LinearVelocity, &ForcedSliding),
         With<Player>,
     >,
     surface_query: Query<(), With<ForceSlide>>,

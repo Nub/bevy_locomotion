@@ -76,7 +76,7 @@ pub fn apply_ladder_movement(
             Entity,
             &Transform,
             &PlayerConfig,
-            &mut PlayerVelocity,
+            &mut LinearVelocity,
             &OnLadder,
             &MoveInput,
             &mut JumpPressed,
