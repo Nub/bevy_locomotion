@@ -170,15 +170,71 @@ pub fn air_movement(
     }
 }
 
-/// Applies gravity when not grounded
+/// Applies gravity to the player when not grounded.
+///
+/// **`With<Player>` is load-bearing.** The player carries `GravityScale(0.0)`
+/// so that this system, and not the solver, owns its fall — but without a
+/// filter the query matched *every* body in the world with a `LinearVelocity`,
+/// player or not. Avian deliberately skips non-dynamic bodies when it applies
+/// gravity; this system did not, so every kinematic body in the host game — the
+/// ones whose motion is authored by hand, precisely because they must not fall
+/// — was quietly given 20 m/s² downward anyway. In Aeonic that dragged every
+/// enemy through the deck into the substrate beneath it, where the navmesh
+/// could not see them and they were culled, and it drooped every projectile in
+/// the game. Every other system in this chain is scoped to the player by asking
+/// for `PlayerConfig` or `MoveInput`; this one had nothing to scope it.
+///
+/// # The shape of the fall
+///
+/// The pull is scaled by [`gravity_scale`] rather than applied flat, so a host
+/// can ask for an arc that rises, hangs and then drops without introducing a
+/// second writer of the same axis on a different schedule. See
+/// [`PlayerConfig::fall_gravity_scale`]. With the neutral defaults this is
+/// exactly `gravity · dt`, as it always was.
 pub fn apply_gravity(
-    mut query: Query<&mut LinearVelocity, (Without<Grounded>, Without<LedgeGrabbing>, Without<LedgeClimbing>, Without<OnLadder>)>,
+    mut query: Query<
+        (&mut LinearVelocity, &PlayerConfig),
+        (
+            With<Player>,
+            Without<Grounded>,
+            Without<LedgeGrabbing>,
+            Without<LedgeClimbing>,
+            Without<OnLadder>,
+        ),
+    >,
     gravity: Res<Gravity>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
-    for mut velocity in &mut query {
-        velocity.0 += gravity.0 * dt;
+    for (mut velocity, config) in &mut query {
+        let scale = gravity_scale(config, velocity.0.y);
+        velocity.0 += gravity.0 * scale * dt;
+    }
+}
+
+/// How hard the world pulls at a given vertical speed, as a multiple of
+/// `Gravity`.
+///
+/// Three bands, and no more than three:
+///
+///   * **still** — inside `gravity_shape_epsilon` of zero, nothing is shaped.
+///   * **apex** — within `apex_band` of the top of the arc, `apex_gravity_scale`
+///     (below 1.0 buys hang time).
+///   * **descent** — past that on the way down, `fall_gravity_scale`.
+///
+/// A rise outside the apex band is left at 1.0 on purpose: the height a jump
+/// reaches is the level designer's number, and re-scaling the climb changes
+/// every gap in the level. The asymmetry belongs in the *return*.
+pub fn gravity_scale(config: &PlayerConfig, vertical_speed: f32) -> f32 {
+    let speed = vertical_speed.abs();
+    if speed <= config.gravity_shape_epsilon {
+        1.0
+    } else if speed <= config.apex_band {
+        config.apex_gravity_scale
+    } else if vertical_speed < 0.0 {
+        config.fall_gravity_scale
+    } else {
+        1.0
     }
 }
 

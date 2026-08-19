@@ -32,6 +32,41 @@ pub struct PlayerConfig {
     pub jump_velocity: f32,
     /// Multiplier applied to upward velocity when jump is released early (0.0-1.0)
     pub jump_cut_multiplier: f32,
+    /// How hard the world pulls on the way **down**, as a multiple of `Gravity`.
+    ///
+    /// A symmetric parabola is the one arc a body never actually flies: it
+    /// arrives at exactly the speed it left with, which is the definition of
+    /// floaty, and it leaves a landing effect nothing to scale against. Above
+    /// 1.0 the descent is heavier than the climb, so a jump rises, hesitates and
+    /// then *drops*.
+    ///
+    /// Owned here, and deliberately here, rather than in a host system that adds
+    /// its own term to `LinearVelocity` on a different schedule: two authors of
+    /// one axis running on two clocks is what made the body visibly vibrate the
+    /// last time this shape was attempted. `apply_gravity` is the single writer
+    /// of the fall and it runs on the fixed step, so the flown curve is the
+    /// solved one at any frame rate. 1.0 is neutral and is the default.
+    pub fall_gravity_scale: f32,
+    /// How hard the world pulls within `apex_band` of the top of an arc.
+    ///
+    /// Below 1.0 this buys hang time — the hesitation at the apex where the
+    /// player picks a landing. Paired with `fall_gravity_scale` above 1.0 the
+    /// two roughly cancel in *total airtime* while making the arc asymmetric,
+    /// which matters because levels are authored around gaps a jump has to
+    /// clear. 1.0 is neutral and is the default.
+    pub apex_gravity_scale: f32,
+    /// The band of vertical speed around zero that `apex_gravity_scale` applies
+    /// to, in m/s. 0.0 disables the hang entirely.
+    pub apex_band: f32,
+    /// Vertical speed below which the shaping is not applied at all, in m/s.
+    ///
+    /// Load-bearing, and not a tolerance: this controller parks the body at
+    /// *exactly* zero vertical velocity while hanging off a ledge, climbing one
+    /// and standing on a ladder. Those states are filtered out of `apply_gravity`
+    /// already, but a body resting in contact with the ground between grounded
+    /// checks is not, and shaping a fall that is really a floor is how a stand
+    /// starts to jitter.
+    pub gravity_shape_epsilon: f32,
     /// Coyote time duration in seconds
     pub coyote_time: f32,
     /// Jump buffer duration in seconds
@@ -100,6 +135,12 @@ impl Default for PlayerConfig {
             air_accel: 15.0,
             jump_velocity: 8.0,
             jump_cut_multiplier: 0.5,
+            // Neutral: a host that says nothing about the shape of a fall gets
+            // the plain parabola it always got.
+            fall_gravity_scale: 1.0,
+            apex_gravity_scale: 1.0,
+            apex_band: 0.0,
+            gravity_shape_epsilon: 0.35,
             coyote_time: 0.15,
             jump_buffer: 0.1,
             stand_height: 1.8,
