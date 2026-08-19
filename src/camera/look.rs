@@ -45,9 +45,26 @@ pub fn apply_mouse_look(
         return;
     };
 
+    // One sensitivity for both axes.
+    //
+    // The yaw branch used to multiply by a hardcoded 0.003 while pitch read
+    // `config.sensitivity`, so any setting other than the shipped default gave
+    // the player a non-uniform mouse: at a 3.0 multiplier the view pitched three
+    // times faster than it yawed, at 0.2 it pitched five times slower. Every
+    // diagonal flick curved, and no amount of practice makes that learnable.
+    // It hid because it is invisible at exactly 1.0.
+    //
+    // `CameraConfig` lives on the pitch entity, so the value is read from there
+    // and applied to both. Read-only access to a `Query` that is otherwise
+    // mutable, which is why this is taken before the yaw write.
+    let sensitivity = pitch_query
+        .single()
+        .map(|(_, _, config)| config.sensitivity)
+        .unwrap_or_else(|_| CameraConfig::default().sensitivity);
+
     // Apply yaw (horizontal rotation)
     if let Ok(mut yaw_transform) = yaw_query.single_mut() {
-        yaw_transform.rotate_y(-look_input.x * 0.003); // Use default sensitivity inline
+        yaw_transform.rotate_y(-look_input.x * sensitivity);
     }
 
     // Apply pitch (vertical rotation)
